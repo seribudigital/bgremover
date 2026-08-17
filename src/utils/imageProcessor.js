@@ -1,6 +1,6 @@
 /**
  * imageProcessor.js
- * Utility engine untuk pemrosesan citra kanvas berbasis JS (Chroma Key, Magic Wand, Brush, Defringe, Smoothing)
+ * Utility engine untuk pemrosesan citra kanvas berbasis JS (Chroma Key, Magic Wand, Brush, Defringe, Smoothing, Shape & Text Boolean Operations)
  */
 
 // Menghitung jarak Euclidean antar dua warna RGB (0 - 100%)
@@ -17,8 +17,6 @@ export function getColorDistance(r1, g1, b1, r2, g2, b2) {
 export function removeByColorKey(imageData, targetColor, tolerance = 20, feather = 10, autoDefringe = true) {
   const data = imageData.data;
   const length = data.length;
-  const width = imageData.width;
-  const height = imageData.height;
   const { r: tr, g: tg, b: tb } = targetColor;
 
   const minDist = Math.max(0, tolerance - feather);
@@ -123,8 +121,6 @@ export function removeByMagicWand(imageData, startX, startY, tolerance = 25, aut
 
 /**
  * Defringe / Edge Choke (Merapikan Tepi Halo / Sisa Garis Putih/Hitam)
- * Algoritma ini secara pintar memotong sisa 1-2px halo di sekeliling objek dan
- * mengganti warna piksel tepi yang tercemar dengan warna bagian dalam objek.
  */
 export function defringeEdges(imageData, chokeAmount = 1) {
   const width = imageData.width;
@@ -139,7 +135,6 @@ export function defringeEdges(imageData, chokeAmount = 1) {
         const idx = (y * width + x) * 4;
         const alpha = copy[idx + 3];
 
-        // Fokus pada piksel di perbatasan/tepi (semi-transparan atau bersebelahan dengan piksel transparan)
         if (alpha > 0) {
           let transparentNeighbors = 0;
           let solidNeighborIdx = -1;
@@ -158,13 +153,10 @@ export function defringeEdges(imageData, chokeAmount = 1) {
             }
           }
 
-          // Jika berbatasan langsung dengan latar transparan (efek halo)
           if (transparentNeighbors >= 2) {
             if (alpha < 230) {
-              // Potong alpha piksel halo
               data[idx + 3] = 0;
             } else if (solidNeighborIdx !== -1) {
-              // Ganti warna piksel tepi dengan warna objek di dalamnya (de-spill)
               data[idx] = copy[solidNeighborIdx];
               data[idx + 1] = copy[solidNeighborIdx + 1];
               data[idx + 2] = copy[solidNeighborIdx + 2];
@@ -228,6 +220,220 @@ export function applyBrush(targetImageData, originalImageData, centerX, centerY,
   }
 
   return targetImageData;
+}
+
+/**
+ * Menggambar Path Geometris (Bentuk)
+ */
+export function drawShapePath(ctx, shapeType, width, height, cornerRadius = 0) {
+  ctx.beginPath();
+  const w2 = width / 2;
+  const h2 = height / 2;
+
+  switch (shapeType) {
+    case 'rect':
+      ctx.rect(-w2, -h2, width, height);
+      break;
+
+    case 'rounded_rect': {
+      const radius = Math.min(cornerRadius || 20, w2, h2);
+      if (ctx.roundRect) {
+        ctx.roundRect(-w2, -h2, width, height, radius);
+      } else {
+        ctx.moveTo(-w2 + radius, -h2);
+        ctx.lineTo(w2 - radius, -h2);
+        ctx.quadraticCurveTo(w2, -h2, w2, -h2 + radius);
+        ctx.lineTo(w2, h2 - radius);
+        ctx.quadraticCurveTo(w2, h2, w2 - radius, h2);
+        ctx.lineTo(-w2 + radius, h2);
+        ctx.quadraticCurveTo(-w2, h2, -w2, h2 - radius);
+        ctx.lineTo(-w2, -h2 + radius);
+        ctx.quadraticCurveTo(-w2, -h2, -w2 + radius, -h2);
+      }
+      break;
+    }
+
+    case 'circle':
+    case 'ellipse':
+      ctx.ellipse(0, 0, Math.abs(w2), Math.abs(h2), 0, 0, Math.PI * 2);
+      break;
+
+    case 'star': {
+      const points = 5;
+      const outerRadius = Math.min(Math.abs(w2), Math.abs(h2));
+      const innerRadius = outerRadius * 0.45;
+      const step = Math.PI / points;
+      let rot = (Math.PI / 2) * 3;
+
+      ctx.moveTo(0, -outerRadius);
+      for (let i = 0; i < points; i++) {
+        let x = Math.cos(rot) * outerRadius * (w2 / outerRadius);
+        let y = Math.sin(rot) * outerRadius * (h2 / outerRadius);
+        ctx.lineTo(x, y);
+        rot += step;
+
+        x = Math.cos(rot) * innerRadius * (w2 / outerRadius);
+        y = Math.sin(rot) * innerRadius * (h2 / outerRadius);
+        ctx.lineTo(x, y);
+        rot += step;
+      }
+      ctx.closePath();
+      break;
+    }
+
+    case 'heart': {
+      const scaleX = w2 / 100;
+      const scaleY = h2 / 100;
+      ctx.moveTo(0, 35 * scaleY);
+      ctx.bezierCurveTo(-75 * scaleX, -40 * scaleY, -100 * scaleX, -90 * scaleY, -45 * scaleX, -95 * scaleY);
+      ctx.bezierCurveTo(0, -95 * scaleY, 0, -60 * scaleY, 0, -45 * scaleY);
+      ctx.bezierCurveTo(0, -60 * scaleY, 0, -95 * scaleY, 45 * scaleX, -95 * scaleY);
+      ctx.bezierCurveTo(100 * scaleX, -90 * scaleY, 75 * scaleX, -40 * scaleY, 0, 35 * scaleY);
+      ctx.closePath();
+      break;
+    }
+
+    case 'triangle':
+      ctx.moveTo(0, -h2);
+      ctx.lineTo(w2, h2);
+      ctx.lineTo(-w2, h2);
+      ctx.closePath();
+      break;
+
+    case 'hexagon': {
+      const sides = 6;
+      ctx.moveTo(w2, 0);
+      for (let i = 1; i <= sides; i++) {
+        const angle = (i * 2 * Math.PI) / sides;
+        ctx.lineTo(w2 * Math.cos(angle), h2 * Math.sin(angle));
+      }
+      ctx.closePath();
+      break;
+    }
+
+    case 'diamond':
+      ctx.moveTo(0, -h2);
+      ctx.lineTo(w2, 0);
+      ctx.lineTo(0, h2);
+      ctx.lineTo(-w2, 0);
+      ctx.closePath();
+      break;
+
+    default:
+      ctx.rect(-w2, -h2, width, height);
+      break;
+  }
+}
+
+/**
+ * Menggambar Teks Kustom pada Context
+ */
+export function drawTextSilhouette(ctx, text, fontSize = 72, fontFamily = 'Impact, sans-serif', fontWeight = 'bold', fontStyle = 'normal') {
+  ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const lines = String(text || 'TEXT').split('\n');
+  const lineHeight = fontSize * 1.15;
+  const totalHeight = lines.length * lineHeight;
+  const startY = -(totalHeight / 2) + lineHeight / 2;
+
+  lines.forEach((line, idx) => {
+    ctx.fillText(line, 0, startY + idx * lineHeight);
+  });
+}
+
+/**
+ * Menerapkan Operasi Boolean (Intersection atau Subtract) pada Canvas
+ * 
+ * @param {HTMLCanvasElement} workingCanvas - Kanvas yang akan dimodifikasi
+ * @param {Object} options - Parameter operasi
+ * @param {'intersect' | 'subtract'} options.operation - 'intersect' (Crop Inside) atau 'subtract' (Hapus/Lubangi Inside)
+ * @param {'shape' | 'text'} options.maskType - 'shape' atau 'text'
+ * @param {string} options.shapeType - 'rect' | 'rounded_rect' | 'circle' | 'star' | 'heart' | 'triangle' | 'hexagon' | 'diamond'
+ * @param {number} options.x - Titik pusat X
+ * @param {number} options.y - Titik pusat Y
+ * @param {number} options.width - Lebar bentuk
+ * @param {number} options.height - Tinggi bentuk
+ * @param {number} options.rotation - Rotasi dalam derajat (0-360)
+ * @param {number} options.feather - Kehalusan tepi (0-50 px)
+ * @param {number} options.cornerRadius - Radius sudut jika rounded_rect
+ * @param {string} options.text - Isi teks jika maskType === 'text'
+ * @param {number} options.fontSize - Ukuran font
+ * @param {string} options.fontFamily - Family font
+ * @param {string} options.fontWeight - Ketebalan font
+ */
+export function applyShapeTextOperation(workingCanvas, options) {
+  if (!workingCanvas) return;
+  const {
+    operation = 'intersect',
+    maskType = 'shape',
+    shapeType = 'circle',
+    x = workingCanvas.width / 2,
+    y = workingCanvas.height / 2,
+    width = 300,
+    height = 300,
+    rotation = 0,
+    feather = 0,
+    cornerRadius = 20,
+    text = 'STUDIO',
+    fontSize = 120,
+    fontFamily = 'Impact, sans-serif',
+    fontWeight = '900',
+    fontStyle = 'normal'
+  } = options;
+
+  const w = workingCanvas.width;
+  const h = workingCanvas.height;
+
+  // 1. Buat Mask Canvas terpisah
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = w;
+  maskCanvas.height = h;
+  const mCtx = maskCanvas.getContext('2d');
+
+  mCtx.save();
+  mCtx.translate(x, y);
+  mCtx.rotate((rotation * Math.PI) / 180);
+
+  if (feather > 0) {
+    mCtx.filter = `blur(${feather}px)`;
+  }
+
+  mCtx.fillStyle = '#000000';
+
+  if (maskType === 'shape') {
+    drawShapePath(mCtx, shapeType, width, height, cornerRadius);
+    mCtx.fill();
+  } else {
+    drawTextSilhouette(mCtx, text, fontSize, fontFamily, fontWeight, fontStyle);
+  }
+  mCtx.restore();
+
+  // 2. Buat Buffer Hasil Komposisi
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = w;
+  tempCanvas.height = h;
+  const tCtx = tempCanvas.getContext('2d');
+
+  // Gambar citra saat ini ke temp
+  tCtx.drawImage(workingCanvas, 0, 0);
+
+  // Lakukan Boolean Composition
+  if (operation === 'intersect') {
+    // Hanya simpan yang berada di dalam mask
+    tCtx.globalCompositeOperation = 'destination-in';
+    tCtx.drawImage(maskCanvas, 0, 0);
+  } else if (operation === 'subtract') {
+    // Hapus/lubangi yang berada di dalam mask
+    tCtx.globalCompositeOperation = 'destination-out';
+    tCtx.drawImage(maskCanvas, 0, 0);
+  }
+
+  // 3. Salin kembali hasil ke workingCanvas
+  const ctx = workingCanvas.getContext('2d');
+  ctx.clearRect(0, 0, w, h);
+  ctx.drawImage(tempCanvas, 0, 0);
 }
 
 /**

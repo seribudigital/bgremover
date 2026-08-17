@@ -8,7 +8,8 @@ import {
   removeByMagicWand, 
   defringeEdges,
   applyBrush, 
-  sampleColorFromCanvas 
+  sampleColorFromCanvas,
+  applyShapeTextOperation
 } from './utils/imageProcessor';
 import { removeBackground } from '@imgly/background-removal';
 
@@ -25,7 +26,7 @@ export default function App() {
   const [historyIndex, setHistoryIndex] = useState(-1);
 
   // States Alat & Pengaturan
-  const [toolMode, setToolMode] = useState('chroma'); // 'chroma' | 'wand' | 'brush' | 'ai'
+  const [toolMode, setToolMode] = useState('chroma'); // 'chroma' | 'wand' | 'brush' | 'shape_mask' | 'ai'
   const [targetColor, setTargetColor] = useState({ r: 0, g: 255, b: 0, hex: '#00ff00' });
   const [tolerance, setTolerance] = useState(25);
   const [feather, setFeather] = useState(10);
@@ -33,6 +34,26 @@ export default function App() {
   const [brushSize, setBrushSize] = useState(30);
   const [brushHardness, setBrushHardness] = useState(80);
   const [brushMode, setBrushMode] = useState('erase'); // 'erase' | 'restore'
+
+  // State untuk Fitur Intersection & Subtract (Bentuk & Teks)
+  const [maskConfig, setMaskConfig] = useState({
+    operation: 'intersect', // 'intersect' | 'subtract'
+    maskType: 'shape',      // 'shape' | 'text'
+    shapeType: 'circle',    // 'rect' | 'rounded_rect' | 'circle' | 'star' | 'heart' | 'triangle' | 'hexagon' | 'diamond'
+    text: 'STUDIO',
+    fontFamily: 'Impact, sans-serif',
+    fontSize: 120,
+    fontWeight: '900',
+    fontStyle: 'normal',
+    x: 250,
+    y: 250,
+    width: 300,
+    height: 300,
+    rotation: 0,
+    feather: 0,
+    cornerRadius: 30,
+    keepAspect: true
+  });
 
   const [bgColorType, setBgColorType] = useState('transparent'); // 'transparent' | 'color' | 'image'
   const [customBgColor, setCustomBgColor] = useState('#ffffff');
@@ -131,6 +152,17 @@ export default function App() {
       const initData = ctx.getImageData(0, 0, img.width, img.height);
       originalImageDataRef.current = initData;
 
+      // Inisialisasi ukuran & posisi mask sesuai dimensi foto
+      const defaultSize = Math.round(Math.min(img.width, img.height) * 0.55);
+      setMaskConfig(prev => ({
+        ...prev,
+        x: Math.round(img.width / 2),
+        y: Math.round(img.height / 2),
+        width: defaultSize,
+        height: defaultSize,
+        fontSize: Math.max(32, Math.round(defaultSize * 0.35))
+      }));
+
       historyStackRef.current = [];
       pushHistoryState(canvas);
     };
@@ -203,6 +235,24 @@ export default function App() {
     ctx.putImageData(updated, 0, 0);
 
     pushHistoryState(canvas);
+  };
+
+  // Handler Terapkan Masking Bentuk / Teks (Intersection / Subtract)
+  const handleApplyMask = () => {
+    const canvas = workingCanvasRef.current;
+    if (!canvas) return;
+    applyShapeTextOperation(canvas, maskConfig);
+    pushHistoryState(canvas);
+  };
+
+  const handleCenterMask = () => {
+    const canvas = workingCanvasRef.current;
+    if (!canvas) return;
+    setMaskConfig(prev => ({
+      ...prev,
+      x: Math.round(canvas.width / 2),
+      y: Math.round(canvas.height / 2)
+    }));
   };
 
   // Brush Event Handlers
@@ -350,6 +400,8 @@ export default function App() {
               onBrushEnd={handleBrushEnd}
               isComparing={isComparing}
               setIsComparing={setIsComparing}
+              maskConfig={maskConfig}
+              setMaskConfig={setMaskConfig}
             />
 
             <SidebarControls 
@@ -382,6 +434,10 @@ export default function App() {
               onExportWebP={() => exportImage('webp')}
               webpQuality={webpQuality}
               setWebpQuality={setWebpQuality}
+              maskConfig={maskConfig}
+              setMaskConfig={setMaskConfig}
+              onApplyMask={handleApplyMask}
+              onCenterMask={handleCenterMask}
             />
           </div>
         )}

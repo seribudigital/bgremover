@@ -4,11 +4,21 @@ import {
   Wand2, 
   Eraser, 
   Sparkles, 
-  Palette, 
   Image as ImageIcon, 
   Download,
   Scissors,
-  Sparkle
+  Shapes,
+  Type,
+  Square,
+  Circle,
+  Star,
+  Heart,
+  Triangle,
+  Hexagon,
+  Diamond,
+  Maximize,
+  CheckCircle2,
+  MinusCircle
 } from 'lucide-react';
 
 export default function SidebarControls({
@@ -30,7 +40,6 @@ export default function SidebarControls({
   setBgColorType,
   customBgColor,
   setCustomBgColor,
-  customBgImage,
   setCustomBgImage,
   onApplyChromaKey,
   onRunAIRemoval,
@@ -40,13 +49,37 @@ export default function SidebarControls({
   onExportJPG,
   onExportWebP,
   webpQuality,
-  setWebpQuality
+  setWebpQuality,
+  maskConfig,
+  setMaskConfig,
+  onApplyMask,
+  onCenterMask
 }) {
   const bgFileInputRef = useRef(null);
 
   const presetColors = [
     '#ffffff', '#000000', '#2f81f7', '#3fb950', 
     '#f85149', '#a371f7', '#f1e05a', '#1f242c'
+  ];
+
+  const shapesList = [
+    { id: 'rect', label: 'Persegi', icon: Square },
+    { id: 'rounded_rect', label: 'Rounded', icon: Square },
+    { id: 'circle', label: 'Lingkaran', icon: Circle },
+    { id: 'star', label: 'Bintang', icon: Star },
+    { id: 'heart', label: 'Hati', icon: Heart },
+    { id: 'triangle', label: 'Segitiga', icon: Triangle },
+    { id: 'hexagon', label: 'Segienam', icon: Hexagon },
+    { id: 'diamond', label: 'Ketupat', icon: Diamond }
+  ];
+
+  const fontList = [
+    { id: 'Impact, sans-serif', label: 'Impact (Tebal & Padat)' },
+    { id: "'Plus Jakarta Sans', sans-serif", label: 'Jakarta Sans (Modern Clean)' },
+    { id: "'Arial Black', sans-serif", label: 'Arial Black (Heavy)' },
+    { id: 'Georgia, serif', label: 'Georgia (Serif Elegan)' },
+    { id: "'Courier New', monospace", label: 'Courier (Monospace)' },
+    { id: 'cursive', label: 'Cursive (Artistik)' }
   ];
 
   const handleBgImageUpload = (e) => {
@@ -69,7 +102,7 @@ export default function SidebarControls({
           <span>Mode Alat Penghapus</span>
         </div>
 
-        <div className="tab-grid">
+        <div className="tab-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
           <button 
             className={`tab-btn ${toolMode === 'chroma' ? 'active' : ''}`}
             onClick={() => setToolMode('chroma')}
@@ -92,15 +125,23 @@ export default function SidebarControls({
             Kuas Manual
           </button>
           <button 
+            className={`tab-btn ${toolMode === 'shape_mask' ? 'active' : ''}`}
+            onClick={() => setToolMode('shape_mask')}
+          >
+            <Shapes size={18} />
+            Bentuk & Teks
+          </button>
+          <button 
             className={`tab-btn ${toolMode === 'ai' ? 'active' : ''}`}
+            style={{ gridColumn: 'span 2' }}
             onClick={() => setToolMode('ai')}
           >
             <Sparkles size={18} />
-            AI Auto
+            AI Auto Removal
           </button>
         </div>
 
-        {/* Dynamic Controls based on toolMode */}
+        {/* Dynamic Controls: Chroma Key */}
         {toolMode === 'chroma' && (
           <div>
             <div className="control-group">
@@ -162,6 +203,7 @@ export default function SidebarControls({
           </div>
         )}
 
+        {/* Dynamic Controls: Magic Wand */}
         {toolMode === 'wand' && (
           <div>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
@@ -183,6 +225,7 @@ export default function SidebarControls({
           </div>
         )}
 
+        {/* Dynamic Controls: Kuas Manual */}
         {toolMode === 'brush' && (
           <div>
             <div className="control-group">
@@ -235,6 +278,305 @@ export default function SidebarControls({
           </div>
         )}
 
+        {/* Dynamic Controls: Shape & Text Masking (Intersection & Subtract) */}
+        {toolMode === 'shape_mask' && maskConfig && (
+          <div>
+            {/* Tipe Operasi: Intersection vs Subtract */}
+            <div className="control-group">
+              <label className="control-label">Jenis Operasi Masking</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
+                <button
+                  className={`btn btn-secondary ${maskConfig.operation === 'intersect' ? 'active' : ''}`}
+                  style={{
+                    fontSize: '0.75rem',
+                    flexDirection: 'column',
+                    padding: '8px 4px',
+                    borderColor: maskConfig.operation === 'intersect' ? 'var(--accent-color)' : 'var(--border-color)',
+                    backgroundColor: maskConfig.operation === 'intersect' ? 'var(--accent-alpha)' : 'var(--bg-tertiary)'
+                  }}
+                  onClick={() => setMaskConfig(prev => ({ ...prev, operation: 'intersect' }))}
+                >
+                  <CheckCircle2 size={16} style={{ color: '#2f81f7', marginBottom: '2px' }} />
+                  <strong>Intersection</strong>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Crop Bagian Dalam</span>
+                </button>
+
+                <button
+                  className={`btn btn-secondary ${maskConfig.operation === 'subtract' ? 'active' : ''}`}
+                  style={{
+                    fontSize: '0.75rem',
+                    flexDirection: 'column',
+                    padding: '8px 4px',
+                    borderColor: maskConfig.operation === 'subtract' ? 'var(--danger-color)' : 'var(--border-color)',
+                    backgroundColor: maskConfig.operation === 'subtract' ? 'rgba(248, 81, 73, 0.15)' : 'var(--bg-tertiary)'
+                  }}
+                  onClick={() => setMaskConfig(prev => ({ ...prev, operation: 'subtract' }))}
+                >
+                  <MinusCircle size={16} style={{ color: '#f85149', marginBottom: '2px' }} />
+                  <strong>Subtract</strong>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>Lubangi Bagian Dalam</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Pilihan Elemen: Bentuk vs Teks */}
+            <div className="control-group">
+              <label className="control-label">Tipe Elemen Pemotong</label>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
+                <button
+                  className={`btn btn-secondary ${maskConfig.maskType === 'shape' ? 'active' : ''}`}
+                  style={{ flex: 1, fontSize: '0.8rem' }}
+                  onClick={() => setMaskConfig(prev => ({ ...prev, maskType: 'shape' }))}
+                >
+                  <Shapes size={15} /> Bentuk (Shape)
+                </button>
+                <button
+                  className={`btn btn-secondary ${maskConfig.maskType === 'text' ? 'active' : ''}`}
+                  style={{ flex: 1, fontSize: '0.8rem' }}
+                  onClick={() => setMaskConfig(prev => ({ ...prev, maskType: 'text' }))}
+                >
+                  <Type size={15} /> Teks (Text)
+                </button>
+              </div>
+            </div>
+
+            {/* Sub-menu Bentuk (Shape Selector) */}
+            {maskConfig.maskType === 'shape' ? (
+              <div>
+                <div className="control-group">
+                  <label className="control-label">Pilih Bentuk</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginTop: '4px' }}>
+                    {shapesList.map(shape => {
+                      const IconComponent = shape.icon;
+                      const isSelected = maskConfig.shapeType === shape.id;
+                      return (
+                        <button
+                          key={shape.id}
+                          className={`btn-secondary ${isSelected ? 'active' : ''}`}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '8px 2px',
+                            borderRadius: 'var(--radius-sm)',
+                            border: isSelected ? '1.5px solid var(--accent-color)' : '1px solid var(--border-color)',
+                            backgroundColor: isSelected ? 'var(--accent-alpha)' : 'var(--bg-tertiary)',
+                            color: isSelected ? 'var(--accent-color)' : 'var(--text-main)',
+                            cursor: 'pointer',
+                            fontSize: '0.65rem'
+                          }}
+                          onClick={() => setMaskConfig(prev => ({ ...prev, shapeType: shape.id }))}
+                        >
+                          <IconComponent size={18} />
+                          <span>{shape.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {maskConfig.shapeType === 'rounded_rect' && (
+                  <div className="control-group">
+                    <div className="control-label">
+                      <span>Radius Sudut (Corner)</span>
+                      <span className="control-val">{maskConfig.cornerRadius || 20}px</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="120"
+                      value={maskConfig.cornerRadius || 20}
+                      onChange={(e) => setMaskConfig(prev => ({ ...prev, cornerRadius: Number(e.target.value) }))}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Sub-menu Teks (Text Mask Controls) */
+              <div>
+                <div className="control-group">
+                  <label className="control-label">Input Teks</label>
+                  <input
+                    type="text"
+                    value={maskConfig.text}
+                    onChange={(e) => setMaskConfig(prev => ({ ...prev, text: e.target.value }))}
+                    placeholder="Ketik teks..."
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      backgroundColor: 'var(--bg-tertiary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      color: 'var(--text-main)',
+                      fontFamily: 'inherit',
+                      fontSize: '0.85rem'
+                    }}
+                  />
+                </div>
+
+                <div className="control-group">
+                  <label className="control-label">Pilihan Font</label>
+                  <select
+                    value={maskConfig.fontFamily}
+                    onChange={(e) => setMaskConfig(prev => ({ ...prev, fontFamily: e.target.value }))}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      backgroundColor: 'var(--bg-tertiary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-sm)',
+                      color: 'var(--text-main)',
+                      fontSize: '0.8rem'
+                    }}
+                  >
+                    {fontList.map(font => (
+                      <option key={font.id} value={font.id} style={{ background: '#161b22', color: '#fff' }}>
+                        {font.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
+                  <button
+                    className={`btn btn-secondary ${maskConfig.fontWeight === '900' || maskConfig.fontWeight === 'bold' ? 'active' : ''}`}
+                    style={{ flex: 1, fontSize: '0.75rem', fontWeight: 800 }}
+                    onClick={() => setMaskConfig(prev => ({
+                      ...prev,
+                      fontWeight: prev.fontWeight === 'normal' ? '900' : 'normal'
+                    }))}
+                  >
+                    Tebal (Bold)
+                  </button>
+                  <button
+                    className={`btn btn-secondary ${maskConfig.fontStyle === 'italic' ? 'active' : ''}`}
+                    style={{ flex: 1, fontSize: '0.75rem', fontStyle: 'italic' }}
+                    onClick={() => setMaskConfig(prev => ({
+                      ...prev,
+                      fontStyle: prev.fontStyle === 'italic' ? 'normal' : 'italic'
+                    }))}
+                  >
+                    Miring (Italic)
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Pengaturan Transformasi Ukuran & Rotasi */}
+            <div className="control-group">
+              <div className="control-label">
+                <span>Ukuran Lebar (Width)</span>
+                <span className="control-val">{maskConfig.width}px</span>
+              </div>
+              <input
+                type="range"
+                min="30"
+                max="1500"
+                value={maskConfig.width}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setMaskConfig(prev => {
+                    const ratio = prev.height / prev.width;
+                    return {
+                      ...prev,
+                      width: val,
+                      height: prev.keepAspect ? Math.round(val * ratio) : prev.height,
+                      fontSize: prev.maskType === 'text' ? Math.round(val * 0.35) : prev.fontSize
+                    };
+                  });
+                }}
+              />
+            </div>
+
+            <div className="control-group">
+              <div className="control-label">
+                <span>Ukuran Tinggi (Height)</span>
+                <span className="control-val">{maskConfig.height}px</span>
+              </div>
+              <input
+                type="range"
+                min="30"
+                max="1500"
+                value={maskConfig.height}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setMaskConfig(prev => ({
+                    ...prev,
+                    height: val
+                  }));
+                }}
+              />
+            </div>
+
+            <div className="control-group">
+              <div className="control-label">
+                <span>Rotasi Sudut</span>
+                <span className="control-val">{maskConfig.rotation || 0}°</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="360"
+                value={maskConfig.rotation || 0}
+                onChange={(e) => setMaskConfig(prev => ({ ...prev, rotation: Number(e.target.value) }))}
+              />
+            </div>
+
+            <div className="control-group">
+              <div className="control-label">
+                <span>Kehalusan Tepi (Feather)</span>
+                <span className="control-val">{maskConfig.feather || 0}px</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="40"
+                value={maskConfig.feather || 0}
+                onChange={(e) => setMaskConfig(prev => ({ ...prev, feather: Number(e.target.value) }))}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
+              <button
+                className="btn btn-secondary"
+                style={{ flex: 1, fontSize: '0.75rem' }}
+                onClick={onCenterMask}
+                title="Pusatkan posisi mask ke tengah kanvas"
+              >
+                <Maximize size={14} /> Pusatkan
+              </button>
+              <button
+                className={`btn btn-secondary ${maskConfig.keepAspect ? 'active' : ''}`}
+                style={{ flex: 1, fontSize: '0.75rem' }}
+                onClick={() => setMaskConfig(prev => ({ ...prev, keepAspect: !prev.keepAspect }))}
+              >
+                Kunci Rasio: {maskConfig.keepAspect ? 'ON' : 'OFF'}
+              </button>
+            </div>
+
+            {/* Tombol Eksekusi Masking */}
+            <button
+              className={`btn ${maskConfig.operation === 'intersect' ? 'btn-primary' : ''}`}
+              style={{
+                width: '100%',
+                marginTop: '14px',
+                backgroundColor: maskConfig.operation === 'subtract' ? 'var(--danger-color)' : undefined,
+                color: '#ffffff'
+              }}
+              onClick={onApplyMask}
+            >
+              <Scissors size={16} />
+              {maskConfig.operation === 'intersect' ? 'Terapkan Intersection (Crop)' : 'Terapkan Subtract (Lubangi)'}
+            </button>
+
+            <p style={{ fontSize: '0.72rem', color: 'var(--text-subtle)', marginTop: '8px', textAlign: 'center' }}>
+              ✨ <em>Tips: Anda juga bisa menggeser, merotasi, dan mengubah ukuran bentuk langsung di atas kanvas!</em>
+            </p>
+          </div>
+        )}
+
+        {/* Dynamic Controls: AI Removal */}
         {toolMode === 'ai' && (
           <div>
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '12px' }}>

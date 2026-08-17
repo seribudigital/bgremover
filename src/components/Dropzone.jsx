@@ -1,5 +1,5 @@
 import React, { useRef } from 'react';
-import { UploadCloud, Image as ImageIcon, Sparkles, Wand2 } from 'lucide-react';
+import { UploadCloud, Image as ImageIcon, Wand2 } from 'lucide-react';
 
 export default function Dropzone({ onImageSelected }) {
   const fileInputRef = useRef(null);
