@@ -1,10 +1,21 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Split, ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { 
+  Split, 
+  ZoomIn, 
+  ZoomOut, 
+  Maximize2, 
+  Pipette, 
+  Wand2, 
+  Eraser, 
+  Shapes, 
+  Sparkles 
+} from 'lucide-react';
 
 export default function CanvasArea({
   originalImage,
   workingCanvasRef,
   toolMode,
+  setToolMode,
   brushSize,
   brushMode,
   bgColorType,
@@ -17,7 +28,9 @@ export default function CanvasArea({
   isComparing,
   setIsComparing,
   maskConfig,
-  setMaskConfig
+  setMaskConfig,
+  onCanvasInit,
+  historySnapshot
 }) {
   const containerRef = useRef(null);
   const compareWrapperRef = useRef(null);
@@ -37,34 +50,38 @@ export default function CanvasArea({
   const [panStart, setPanStart] = useState({ x: 0, y: 0, scrollLeft: 0, scrollTop: 0 });
 
   // State Transform Interaction for Shape / Text Masking
-  // dragAction: null | 'move' | 'nw' | 'ne' | 'se' | 'sw' | 'n' | 's' | 'e' | 'w' | 'rotate'
   const [dragAction, setDragAction] = useState(null);
-  const [dragOrigin, setDragOrigin] = useState({ mouseX: 0, mouseY: 0, initX: 0, initY: 0, initW: 0, initH: 0, initRot: 0 });
+  const [dragOrigin, setDragOrigin] = useState({ mouseX: 0, mouseY: 0, initX: 0, initY: 0, initW: 0, initH: 0, initRot: 0, initFontSize: 120 });
 
-  // Ukuran dasar kanvas saat dimuat
+  // Inisialisasi dan Pemulihan Kanvas yang Tahan Banting (Anti Hilang)
   useEffect(() => {
-    const updateSize = () => {
-      const canvas = workingCanvasRef.current;
-      if (canvas) {
-        setBaseCanvasSize({
-          width: canvas.width,
-          height: canvas.height
-        });
-      }
-    };
-
-    updateSize();
-
     const canvas = workingCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !originalImage) return;
 
-    const resizeObserver = new ResizeObserver(updateSize);
-    resizeObserver.observe(canvas);
+    const imgW = originalImage.naturalWidth || originalImage.width;
+    const imgH = originalImage.naturalHeight || originalImage.height;
 
-    return () => {
-      resizeObserver.disconnect();
-    };
-  }, [workingCanvasRef, originalImage]);
+    if (canvas.width !== imgW || canvas.height !== imgH) {
+      canvas.width = imgW;
+      canvas.height = imgH;
+    }
+
+    const ctx = canvas.getContext('2d');
+
+    if (historySnapshot) {
+      // Pulihkan state riwayat jika ada
+      ctx.putImageData(historySnapshot, 0, 0);
+    } else {
+      // Inisialisasi awal foto
+      ctx.clearRect(0, 0, imgW, imgH);
+      ctx.drawImage(originalImage, 0, 0);
+      if (onCanvasInit) {
+        onCanvasInit(canvas);
+      }
+    }
+
+    setBaseCanvasSize({ width: imgW, height: imgH });
+  }, [originalImage, historySnapshot, workingCanvasRef, onCanvasInit]);
 
   // Handle Zoom dengan Scroll Wheel
   const handleWheelZoom = (e) => {
@@ -207,7 +224,6 @@ export default function CanvasArea({
           y: Math.round(dragOrigin.initY + dy)
         }));
       } else if (dragAction === 'rotate') {
-        // Hitung sudut dari pusat mask ke posisi mouse
         const centerX = maskConfig.x;
         const centerY = maskConfig.y;
         const rad = Math.atan2(coords.y - centerY, coords.x - centerX);
@@ -219,8 +235,6 @@ export default function CanvasArea({
           rotation: deg
         }));
       } else {
-        // Resize handles (nw, ne, se, sw, n, s, e, w)
-        // Hitung rotasi lokal untuk resize yang akurat
         const rad = -((maskConfig.rotation || 0) * Math.PI) / 180;
         const cos = Math.cos(rad);
         const sin = Math.sin(rad);
@@ -352,18 +366,68 @@ export default function CanvasArea({
 
   return (
     <div className="canvas-viewport">
-      {/* Top Toolbar */}
+      {/* Top Toolbar dengan Quick Tool Selector */}
       <div className="canvas-toolbar-top">
         <div className="tool-group">
-          <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-            Mode: <strong style={{ color: 'var(--accent-color)' }}>
-              {toolMode === 'chroma' && 'Chroma Color Key'}
-              {toolMode === 'wand' && 'Magic Wand Click'}
-              {toolMode === 'brush' && `Kuas Manual (${brushMode === 'erase' ? 'Penghapus' : 'Pemulih'})`}
-              {toolMode === 'shape_mask' && `Bentuk & Teks (${isIntersect ? 'Intersection / Crop' : 'Subtract / Lubangi'})`}
-              {toolMode === 'ai' && 'AI Auto Removal'}
-            </strong>
-          </span>
+          {/* Quick Tool Selector Tabs */}
+          <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-tertiary)', padding: '2px', borderRadius: 'var(--radius-md)' }}>
+            <button
+              className={`btn btn-icon ${toolMode === 'chroma' ? 'active' : ''}`}
+              onClick={() => setToolMode && setToolMode('chroma')}
+              title="Chroma Key"
+              style={{ fontSize: '0.75rem', gap: '4px', padding: '5px 10px' }}
+            >
+              <Pipette size={14} />
+              <span>Chroma</span>
+            </button>
+
+            <button
+              className={`btn btn-icon ${toolMode === 'wand' ? 'active' : ''}`}
+              onClick={() => setToolMode && setToolMode('wand')}
+              title="Magic Wand"
+              style={{ fontSize: '0.75rem', gap: '4px', padding: '5px 10px' }}
+            >
+              <Wand2 size={14} />
+              <span>Wand</span>
+            </button>
+
+            <button
+              className={`btn btn-icon ${toolMode === 'brush' ? 'active' : ''}`}
+              onClick={() => setToolMode && setToolMode('brush')}
+              title="Kuas Manual"
+              style={{ fontSize: '0.75rem', gap: '4px', padding: '5px 10px' }}
+            >
+              <Eraser size={14} />
+              <span>Kuas</span>
+            </button>
+
+            <button
+              className={`btn btn-icon ${toolMode === 'shape_mask' ? 'active' : ''}`}
+              onClick={() => setToolMode && setToolMode('shape_mask')}
+              title="Bentuk & Teks (Crop & Cutout)"
+              style={{
+                fontSize: '0.75rem',
+                gap: '4px',
+                padding: '5px 10px',
+                backgroundColor: toolMode === 'shape_mask' ? 'var(--accent-alpha)' : undefined,
+                color: toolMode === 'shape_mask' ? 'var(--accent-color)' : undefined,
+                fontWeight: 600
+              }}
+            >
+              <Shapes size={14} />
+              <span>Bentuk & Teks</span>
+            </button>
+
+            <button
+              className={`btn btn-icon ${toolMode === 'ai' ? 'active' : ''}`}
+              onClick={() => setToolMode && setToolMode('ai')}
+              title="AI Auto Removal"
+              style={{ fontSize: '0.75rem', gap: '4px', padding: '5px 10px' }}
+            >
+              <Sparkles size={14} />
+              <span>AI</span>
+            </button>
+          </div>
         </div>
 
         {/* Zoom & Compare Controls */}
@@ -434,13 +498,13 @@ export default function CanvasArea({
               maxWidth: 'none',
               maxHeight: 'none',
               display: 'block',
-              cursor: toolMode === 'eyedropper' || toolMode === 'wand' ? 'crosshair' : toolMode === 'brush' ? 'none' : isMaskMode ? 'default' : 'default',
+              cursor: toolMode === 'eyedropper' || toolMode === 'wand' ? 'crosshair' : toolMode === 'brush' ? 'none' : 'default',
               ...getCanvasStyle()
             }}
-            onClick={onCanvasClick}
-            onMouseDown={onBrushStart}
+            onClick={toolMode !== 'shape_mask' ? onCanvasClick : undefined}
+            onMouseDown={toolMode === 'brush' ? onBrushStart : undefined}
             onMouseMove={handleCanvasMouseMove}
-            onMouseUp={onBrushEnd}
+            onMouseUp={toolMode === 'brush' ? onBrushEnd : undefined}
           />
 
           {/* Interactive Transform Overlay for Shape / Text Masking */}

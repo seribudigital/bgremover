@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import Dropzone from './components/Dropzone';
 import CanvasArea from './components/CanvasArea';
@@ -64,7 +64,7 @@ export default function App() {
   const [webpQuality, setWebpQuality] = useState(85);
 
   // Fungsi menyimpan snapshot histori baru
-  const pushHistoryState = (canvas) => {
+  const pushHistoryState = useCallback((canvas) => {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -87,10 +87,10 @@ export default function App() {
     currentStack.push(copy);
     historyStackRef.current = currentStack;
     setHistoryIndex(currentStack.length - 1);
-  };
+  }, [historyIndex]);
 
   // Undo (Kembali ke langkah sebelumnya)
-  const handleUndo = () => {
+  const handleUndo = useCallback(() => {
     if (historyIndex <= 0 || !workingCanvasRef.current) return;
     const newIndex = historyIndex - 1;
     const canvas = workingCanvasRef.current;
@@ -98,10 +98,10 @@ export default function App() {
     const snapshot = historyStackRef.current[newIndex];
     ctx.putImageData(snapshot, 0, 0);
     setHistoryIndex(newIndex);
-  };
+  }, [historyIndex]);
 
   // Redo (Maju ke langkah berikutnya)
-  const handleRedo = () => {
+  const handleRedo = useCallback(() => {
     if (historyIndex >= historyStackRef.current.length - 1 || !workingCanvasRef.current) return;
     const newIndex = historyIndex + 1;
     const canvas = workingCanvasRef.current;
@@ -109,7 +109,7 @@ export default function App() {
     const snapshot = historyStackRef.current[newIndex];
     ctx.putImageData(snapshot, 0, 0);
     setHistoryIndex(newIndex);
-  };
+  }, [historyIndex]);
 
   // Keyboard Shortcuts (Ctrl+Z & Ctrl+Y)
   useEffect(() => {
@@ -129,7 +129,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [historyIndex]);
+  }, [handleUndo, handleRedo]);
 
   // Inisialisasi Kanvas saat foto baru diunggah
   const handleImageSelected = (src) => {
@@ -138,36 +138,32 @@ export default function App() {
     img.crossOrigin = 'anonymous';
     img.onload = () => {
       setOriginalImgObj(img);
-
-      const canvas = workingCanvasRef.current;
-      if (!canvas) return;
-
-      canvas.width = img.width;
-      canvas.height = img.height;
-
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-
-      // Simpan backup data piksel asli & reset stack histori
-      const initData = ctx.getImageData(0, 0, img.width, img.height);
-      originalImageDataRef.current = initData;
-
-      // Inisialisasi ukuran & posisi mask sesuai dimensi foto
-      const defaultSize = Math.round(Math.min(img.width, img.height) * 0.55);
-      setMaskConfig(prev => ({
-        ...prev,
-        x: Math.round(img.width / 2),
-        y: Math.round(img.height / 2),
-        width: defaultSize,
-        height: defaultSize,
-        fontSize: Math.max(32, Math.round(defaultSize * 0.35))
-      }));
-
       historyStackRef.current = [];
-      pushHistoryState(canvas);
+      setHistoryIndex(-1);
     };
     img.src = src;
   };
+
+  // Callback saat Canvas selesai dimount di DOM
+  const handleCanvasInit = useCallback((canvas) => {
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const initData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    originalImageDataRef.current = initData;
+
+    const defaultSize = Math.round(Math.min(canvas.width, canvas.height) * 0.55);
+    setMaskConfig(prev => ({
+      ...prev,
+      x: Math.round(canvas.width / 2),
+      y: Math.round(canvas.height / 2),
+      width: defaultSize,
+      height: defaultSize,
+      fontSize: Math.max(32, Math.round(defaultSize * 0.35))
+    }));
+
+    historyStackRef.current = [];
+    pushHistoryState(canvas);
+  }, [pushHistoryState]);
 
   // Reset total ke foto awal
   const handleReset = () => {
@@ -186,7 +182,7 @@ export default function App() {
   // Click handler pada Canvas
   const handleCanvasClick = (e) => {
     const canvas = workingCanvasRef.current;
-    if (!canvas) return;
+    if (!canvas || toolMode === 'shape_mask') return;
     const rect = canvas.getBoundingClientRect();
     
     const scaleX = canvas.width / rect.width;
@@ -371,7 +367,12 @@ export default function App() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <Header 
         hasImage={!!imageSrc}
-        onNewImage={() => setImageSrc(null)}
+        onNewImage={() => {
+          setImageSrc(null);
+          setOriginalImgObj(null);
+          historyStackRef.current = [];
+          setHistoryIndex(-1);
+        }}
         onReset={handleReset}
         onUndo={handleUndo}
         canUndo={historyIndex > 0}
@@ -389,6 +390,7 @@ export default function App() {
               originalImage={originalImgObj}
               workingCanvasRef={workingCanvasRef}
               toolMode={toolMode}
+              setToolMode={setToolMode}
               brushSize={brushSize}
               brushMode={brushMode}
               bgColorType={bgColorType}
@@ -402,6 +404,8 @@ export default function App() {
               setIsComparing={setIsComparing}
               maskConfig={maskConfig}
               setMaskConfig={setMaskConfig}
+              onCanvasInit={handleCanvasInit}
+              historySnapshot={historyIndex >= 0 ? historyStackRef.current[historyIndex] : null}
             />
 
             <SidebarControls 
@@ -423,7 +427,6 @@ export default function App() {
               setBgColorType={setBgColorType}
               customBgColor={customBgColor}
               setCustomBgColor={setCustomBgColor}
-              customBgImage={customBgImage}
               setCustomBgImage={setCustomBgImage}
               onApplyChromaKey={handleApplyChromaKey}
               onRunAIRemoval={handleRunAIRemoval}
