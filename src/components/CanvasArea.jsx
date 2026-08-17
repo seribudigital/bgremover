@@ -351,22 +351,31 @@ export default function CanvasArea({
     }
   };
 
-  // Render SVG Text dengan dukungan Text Wrap
+  // Render SVG Text dengan dukungan Text Wrap presisi, Letter Spacing & Line Height
   const renderSvgText = () => {
     if (!maskConfig) return null;
     const {
       text = 'STUDIO',
-      fontSize = 50,
+      fontSize = 60,
       fontFamily = 'Impact, sans-serif',
       fontWeight = 'bold',
       fontStyle = 'normal',
+      letterSpacing = 0,
       width = 300,
       wrapText = true,
       textAlign = 'center',
       lineHeight = 1.2
     } = maskConfig;
 
-    const lines = getWrappedTextLines(null, text, width, wrapText !== false);
+    const lines = getWrappedTextLines(text, width, {
+      fontSize,
+      fontFamily,
+      fontWeight,
+      fontStyle,
+      letterSpacing,
+      wrapText: wrapText !== false
+    });
+
     const lineSpacing = fontSize * (lineHeight || 1.2);
     const totalTextHeight = lines.length * lineSpacing;
     const startY = -(totalTextHeight / 2) + lineSpacing / 2;
@@ -383,6 +392,7 @@ export default function CanvasArea({
         fontFamily={fontFamily}
         fontWeight={fontWeight}
         fontStyle={fontStyle}
+        letterSpacing={`${letterSpacing}px`}
         fill={themeFill}
         stroke={themeColor}
         strokeWidth="1.5"

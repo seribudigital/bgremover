@@ -48,6 +48,7 @@ export default function App() {
     wrapText: true,
     textAlign: 'center',
     lineHeight: 1.2,
+    letterSpacing: 0,
     x: 250,
     y: 250,
     width: 350,

@@ -1,7 +1,21 @@
 /**
  * imageProcessor.js
- * Utility engine untuk pemrosesan citra kanvas berbasis JS (Chroma Key, Magic Wand, Brush, Defringe, Smoothing, Shape & Text Boolean Operations)
+ * Utility engine untuk pemrosesan citra kanvas berbasis JS (Chroma Key, Magic Wand, Brush, Defringe, Smoothing, Shape & Text Boolean Operations, Word Wrap, Letter Spacing & Line Height)
  */
+
+let sharedMeasureCanvas = null;
+let sharedMeasureCtx = null;
+
+function getMeasureCtx() {
+  if (typeof document !== 'undefined') {
+    if (!sharedMeasureCanvas) {
+      sharedMeasureCanvas = document.createElement('canvas');
+      sharedMeasureCtx = sharedMeasureCanvas.getContext('2d');
+    }
+    return sharedMeasureCtx;
+  }
+  return null;
+}
 
 // Menghitung jarak Euclidean antar dua warna RGB (0 - 100%)
 export function getColorDistance(r1, g1, b1, r2, g2, b2) {
@@ -34,10 +48,8 @@ export function removeByColorKey(imageData, targetColor, tolerance = 20, feather
     const dist = getColorDistance(r, g, b, tr, tg, tb);
 
     if (dist <= minDist) {
-      // Hapus total piksel latar
       data[i + 3] = 0;
     } else if (dist < maxDist) {
-      // Feathering (transisi mulus di tepi)
       const factor = (dist - minDist) / range;
       data[i + 3] = Math.min(currentAlpha, Math.round(currentAlpha * Math.pow(factor, 1.5)));
     }
@@ -64,7 +76,7 @@ export function removeByMagicWand(imageData, startX, startY, tolerance = 25, aut
   const sb = data[startIndex + 2];
   const sa = data[startIndex + 3];
 
-  if (sa === 0) return imageData; // Sudah transparan
+  if (sa === 0) return imageData;
 
   const visited = new Uint8Array(width * height);
   const queue = new Int32Array(width * height * 2);
@@ -83,7 +95,6 @@ export function removeByMagicWand(imageData, startX, startY, tolerance = 25, aut
     const cy = queue[qHead++];
     const idx = (cy * width + cx) * 4;
 
-    // Set transparansi
     data[idx + 3] = 0;
 
     for (let d = 0; d < 4; d++) {
@@ -324,14 +335,40 @@ export function drawShapePath(ctx, shapeType, width, height, cornerRadius = 0) {
 }
 
 /**
- * Memecah teks menjadi baris-baris sesuai batas lebar maksimum (Word Wrap Engine)
+ * Memecah teks menjadi baris-baris sesuai batas lebar maksimum dengan pengukuran presisi
  */
-export function getWrappedTextLines(ctx, text, maxWidth, wrapText = true) {
-  const paragraphs = String(text || '').split('\n');
+export function getWrappedTextLines(text, maxWidth, options = {}) {
+  const {
+    fontSize = 60,
+    fontFamily = 'Impact, sans-serif',
+    fontWeight = 'bold',
+    fontStyle = 'normal',
+    letterSpacing = 0,
+    wrapText = true
+  } = options;
+
+  const rawText = String(text || '');
   if (!wrapText || maxWidth <= 0) {
-    return paragraphs;
+    return rawText.split('\n');
   }
 
+  const ctx = getMeasureCtx();
+  if (ctx) {
+    ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
+    if (ctx.letterSpacing !== undefined) {
+      ctx.letterSpacing = `${letterSpacing}px`;
+    }
+  }
+
+  const measureTextWidth = (str) => {
+    if (!str) return 0;
+    if (ctx) {
+      return ctx.measureText(str).width + (str.length > 1 ? (str.length - 1) * letterSpacing : 0);
+    }
+    return str.length * (fontSize * 0.58) + (str.length > 1 ? (str.length - 1) * letterSpacing : 0);
+  };
+
+  const paragraphs = rawText.split('\n');
   const allLines = [];
 
   for (const para of paragraphs) {
@@ -346,13 +383,28 @@ export function getWrappedTextLines(ctx, text, maxWidth, wrapText = true) {
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
       const testLine = currentLine ? `${currentLine} ${word}` : word;
-      const testWidth = ctx ? ctx.measureText(testLine).width : testLine.length * 12;
+      const testWidth = measureTextWidth(testLine);
 
       if (testWidth <= maxWidth || !currentLine) {
         currentLine = testLine;
       } else {
         allLines.push(currentLine);
-        currentLine = word;
+
+        if (measureTextWidth(word) > maxWidth) {
+          let brokenWord = '';
+          for (let c = 0; c < word.length; c++) {
+            const testChar = brokenWord + word[c];
+            if (measureTextWidth(testChar) <= maxWidth || !brokenWord) {
+              brokenWord = testChar;
+            } else {
+              allLines.push(brokenWord);
+              brokenWord = word[c];
+            }
+          }
+          currentLine = brokenWord;
+        } else {
+          currentLine = word;
+        }
       }
     }
 
@@ -365,15 +417,16 @@ export function getWrappedTextLines(ctx, text, maxWidth, wrapText = true) {
 }
 
 /**
- * Menggambar Teks Kustom pada Context dengan Text Wrapping, Alignment, dan Box Bounding
+ * Menggambar Teks Kustom pada Context dengan Word Wrapping, Alignment, Letter Spacing, dan Line Height
  */
 export function drawTextSilhouette(ctx, options = {}) {
   const {
     text = 'STUDIO',
-    fontSize = 72,
+    fontSize = 60,
     fontFamily = 'Impact, sans-serif',
     fontWeight = 'bold',
     fontStyle = 'normal',
+    letterSpacing = 0,
     width = 300,
     wrapText = true,
     textAlign = 'center',
@@ -381,10 +434,21 @@ export function drawTextSilhouette(ctx, options = {}) {
   } = typeof options === 'string' ? { text: options } : options;
 
   ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
+  if (ctx.letterSpacing !== undefined) {
+    ctx.letterSpacing = `${letterSpacing}px`;
+  }
   ctx.textAlign = textAlign;
   ctx.textBaseline = 'middle';
 
-  const lines = getWrappedTextLines(ctx, text, width, wrapText);
+  const lines = getWrappedTextLines(text, width, {
+    fontSize,
+    fontFamily,
+    fontWeight,
+    fontStyle,
+    letterSpacing,
+    wrapText
+  });
+
   const lineSpacing = fontSize * (lineHeight || 1.2);
   const totalTextHeight = lines.length * lineSpacing;
   const startY = -(totalTextHeight / 2) + lineSpacing / 2;
@@ -418,10 +482,11 @@ export function applyShapeTextOperation(workingCanvas, options) {
     feather = 0,
     cornerRadius = 20,
     text = 'STUDIO',
-    fontSize = 120,
+    fontSize = 60,
     fontFamily = 'Impact, sans-serif',
     fontWeight = '900',
     fontStyle = 'normal',
+    letterSpacing = 0,
     wrapText = true,
     textAlign = 'center',
     lineHeight = 1.2
@@ -456,6 +521,7 @@ export function applyShapeTextOperation(workingCanvas, options) {
       fontFamily,
       fontWeight,
       fontStyle,
+      letterSpacing,
       width,
       height,
       wrapText,

@@ -475,14 +475,43 @@ export default function SidebarControls({
                 <div className="control-group">
                   <div className="control-label">
                     <span>Ukuran Huruf (Font Size)</span>
-                    <span className="control-val">{maskConfig.fontSize || 50}px</span>
+                    <span className="control-val">{maskConfig.fontSize || 60}px</span>
                   </div>
                   <input
                     type="range"
-                    min="14"
-                    max="250"
-                    value={maskConfig.fontSize || 50}
+                    min="10"
+                    max="1000"
+                    value={maskConfig.fontSize || 60}
                     onChange={(e) => setMaskConfig(prev => ({ ...prev, fontSize: Number(e.target.value) }))}
+                  />
+                </div>
+
+                <div className="control-group">
+                  <div className="control-label">
+                    <span>Jarak Antar Huruf (Letter Spacing)</span>
+                    <span className="control-val">{maskConfig.letterSpacing || 0}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="-10"
+                    max="100"
+                    value={maskConfig.letterSpacing || 0}
+                    onChange={(e) => setMaskConfig(prev => ({ ...prev, letterSpacing: Number(e.target.value) }))}
+                  />
+                </div>
+
+                <div className="control-group">
+                  <div className="control-label">
+                    <span>Spasi Baris (Line Height)</span>
+                    <span className="control-val">{maskConfig.lineHeight || 1.2}x</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="3.0"
+                    step="0.05"
+                    value={maskConfig.lineHeight || 1.2}
+                    onChange={(e) => setMaskConfig(prev => ({ ...prev, lineHeight: Number(e.target.value) }))}
                   />
                 </div>
 
@@ -543,7 +572,7 @@ export default function SidebarControls({
               <input
                 type="range"
                 min="30"
-                max="1800"
+                max="4000"
                 value={maskConfig.width}
                 onChange={(e) => {
                   const val = Number(e.target.value);
@@ -567,7 +596,7 @@ export default function SidebarControls({
               <input
                 type="range"
                 min="30"
-                max="1800"
+                max="4000"
                 value={maskConfig.height}
                 onChange={(e) => {
                   const val = Number(e.target.value);
