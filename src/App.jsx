@@ -189,7 +189,7 @@ export default function App() {
   // Click handler pada Canvas
   const handleCanvasClick = (e) => {
     const canvas = workingCanvasRef.current;
-    if (!canvas || toolMode === 'shape_mask') return;
+    if (!canvas || toolMode === 'shape_mask' || toolMode === 'shape' || toolMode === 'text') return;
     const rect = canvas.getBoundingClientRect();
     
     const scaleX = canvas.width / rect.width;

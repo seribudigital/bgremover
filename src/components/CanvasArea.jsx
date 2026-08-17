@@ -8,6 +8,7 @@ import {
   Wand2, 
   Eraser, 
   Shapes, 
+  Type,
   Sparkles 
 } from 'lucide-react';
 import { getWrappedTextLines } from '../utils/imageProcessor';
@@ -400,7 +401,9 @@ export default function CanvasArea({
     );
   };
 
-  const isMaskMode = toolMode === 'shape_mask';
+  const isShapeActive = toolMode === 'shape' || (toolMode === 'shape_mask' && maskConfig?.maskType === 'shape');
+  const isTextActive = toolMode === 'text' || (toolMode === 'shape_mask' && maskConfig?.maskType === 'text');
+  const isMaskMode = isShapeActive || isTextActive;
   const isIntersect = maskConfig?.operation === 'intersect';
   const themeColor = isIntersect ? '#2f81f7' : '#f85149';
   const themeFill = isIntersect ? 'rgba(47, 129, 247, 0.22)' : 'rgba(248, 81, 73, 0.22)';
@@ -443,20 +446,43 @@ export default function CanvasArea({
             </button>
 
             <button
-              className={`btn btn-icon ${toolMode === 'shape_mask' ? 'active' : ''}`}
-              onClick={() => setToolMode && setToolMode('shape_mask')}
-              title="Bentuk & Teks (Crop & Cutout)"
+              className={`btn btn-icon ${isShapeActive ? 'active' : ''}`}
+              onClick={() => {
+                if (setToolMode) setToolMode('shape');
+                if (setMaskConfig) setMaskConfig(p => ({ ...p, maskType: 'shape' }));
+              }}
+              title="Potong Bentuk (Shape Mask)"
               style={{
                 fontSize: '0.75rem',
                 gap: '4px',
                 padding: '5px 10px',
-                backgroundColor: toolMode === 'shape_mask' ? 'var(--accent-alpha)' : undefined,
-                color: toolMode === 'shape_mask' ? 'var(--accent-color)' : undefined,
+                backgroundColor: isShapeActive ? 'var(--accent-alpha)' : undefined,
+                color: isShapeActive ? 'var(--accent-color)' : undefined,
                 fontWeight: 600
               }}
             >
               <Shapes size={14} />
-              <span>Bentuk & Teks</span>
+              <span>Bentuk</span>
+            </button>
+
+            <button
+              className={`btn btn-icon ${isTextActive ? 'active' : ''}`}
+              onClick={() => {
+                if (setToolMode) setToolMode('text');
+                if (setMaskConfig) setMaskConfig(p => ({ ...p, maskType: 'text' }));
+              }}
+              title="Potong Teks & Wrap Text"
+              style={{
+                fontSize: '0.75rem',
+                gap: '4px',
+                padding: '5px 10px',
+                backgroundColor: isTextActive ? 'var(--accent-alpha)' : undefined,
+                color: isTextActive ? 'var(--accent-color)' : undefined,
+                fontWeight: 600
+              }}
+            >
+              <Type size={14} />
+              <span>Teks (Wrap)</span>
             </button>
 
             <button

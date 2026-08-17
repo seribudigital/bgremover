@@ -98,6 +98,10 @@ export default function SidebarControls({
     }
   };
 
+  const isShapeActive = toolMode === 'shape' || (toolMode === 'shape_mask' && maskConfig?.maskType === 'shape');
+  const isTextActive = toolMode === 'text' || (toolMode === 'shape_mask' && maskConfig?.maskType === 'text');
+  const isMaskMode = isShapeActive || isTextActive;
+
   return (
     <aside className="sidebar-panel">
       {/* Section 1: Mode Alat Penghapus */}
@@ -114,6 +118,7 @@ export default function SidebarControls({
             <Pipette size={18} />
             Chroma Key
           </button>
+
           <button 
             className={`tab-btn ${toolMode === 'wand' ? 'active' : ''}`}
             onClick={() => setToolMode('wand')}
@@ -121,6 +126,7 @@ export default function SidebarControls({
             <Wand2 size={18} />
             Magic Wand
           </button>
+
           <button 
             className={`tab-btn ${toolMode === 'brush' ? 'active' : ''}`}
             onClick={() => setToolMode('brush')}
@@ -128,20 +134,36 @@ export default function SidebarControls({
             <Eraser size={18} />
             Kuas Manual
           </button>
+
           <button 
-            className={`tab-btn ${toolMode === 'shape_mask' ? 'active' : ''}`}
-            onClick={() => setToolMode('shape_mask')}
+            className={`tab-btn ${isShapeActive ? 'active' : ''}`}
+            onClick={() => {
+              setToolMode('shape');
+              setMaskConfig(prev => ({ ...prev, maskType: 'shape' }));
+            }}
           >
             <Shapes size={18} />
-            Bentuk & Teks
+            Potong Bentuk
           </button>
+
+          <button 
+            className={`tab-btn ${isTextActive ? 'active' : ''}`}
+            style={{ borderColor: isTextActive ? 'var(--accent-color)' : undefined }}
+            onClick={() => {
+              setToolMode('text');
+              setMaskConfig(prev => ({ ...prev, maskType: 'text' }));
+            }}
+          >
+            <Type size={18} />
+            Potong Teks (Wrap)
+          </button>
+
           <button 
             className={`tab-btn ${toolMode === 'ai' ? 'active' : ''}`}
-            style={{ gridColumn: 'span 2' }}
             onClick={() => setToolMode('ai')}
           >
             <Sparkles size={18} />
-            AI Auto Removal
+            AI Auto
           </button>
         </div>
 
@@ -283,7 +305,7 @@ export default function SidebarControls({
         )}
 
         {/* Dynamic Controls: Shape & Text Masking (Intersection & Subtract) */}
-        {toolMode === 'shape_mask' && maskConfig && (
+        {isMaskMode && maskConfig && (
           <div>
             {/* Tipe Operasi: Intersection vs Subtract */}
             <div className="control-group">
@@ -323,32 +345,11 @@ export default function SidebarControls({
               </div>
             </div>
 
-            {/* Pilihan Elemen: Bentuk vs Teks */}
-            <div className="control-group">
-              <label className="control-label">Tipe Elemen Pemotong</label>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                <button
-                  className={`btn btn-secondary ${maskConfig.maskType === 'shape' ? 'active' : ''}`}
-                  style={{ flex: 1, fontSize: '0.8rem' }}
-                  onClick={() => setMaskConfig(prev => ({ ...prev, maskType: 'shape' }))}
-                >
-                  <Shapes size={15} /> Bentuk (Shape)
-                </button>
-                <button
-                  className={`btn btn-secondary ${maskConfig.maskType === 'text' ? 'active' : ''}`}
-                  style={{ flex: 1, fontSize: '0.8rem' }}
-                  onClick={() => setMaskConfig(prev => ({ ...prev, maskType: 'text' }))}
-                >
-                  <Type size={15} /> Teks (Text)
-                </button>
-              </div>
-            </div>
-
             {/* Sub-menu Bentuk (Shape Selector) */}
-            {maskConfig.maskType === 'shape' ? (
+            {isShapeActive && (
               <div>
                 <div className="control-group">
-                  <label className="control-label">Pilih Bentuk</label>
+                  <label className="control-label">Pilih Bentuk Geometri</label>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginTop: '4px' }}>
                     {shapesList.map(shape => {
                       const IconComponent = shape.icon;
@@ -396,16 +397,18 @@ export default function SidebarControls({
                   </div>
                 )}
               </div>
-            ) : (
-              /* Sub-menu Teks (Text Mask Controls with Wrap Text) */
+            )}
+
+            {/* Sub-menu Teks (Text Mask Controls with Wrap Text) */}
+            {isTextActive && (
               <div>
                 <div className="control-group">
-                  <label className="control-label">Input Teks (Bisa Paragraf)</label>
+                  <label className="control-label">Input Teks / Kalimat / Paragraf</label>
                   <textarea
                     rows={3}
                     value={maskConfig.text}
                     onChange={(e) => setMaskConfig(prev => ({ ...prev, text: e.target.value }))}
-                    placeholder="Ketik teks atau kalimat di sini..."
+                    placeholder="Ketik kata atau kalimat panjang di sini..."
                     style={{
                       width: '100%',
                       padding: '8px 10px',
@@ -425,12 +428,18 @@ export default function SidebarControls({
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button
                       className={`btn btn-secondary ${maskConfig.wrapText !== false ? 'active' : ''}`}
-                      style={{ flex: 1, fontSize: '0.75rem', gap: '6px' }}
+                      style={{ 
+                        flex: 1, 
+                        fontSize: '0.75rem', 
+                        gap: '6px',
+                        backgroundColor: maskConfig.wrapText !== false ? 'var(--accent-alpha)' : undefined,
+                        borderColor: maskConfig.wrapText !== false ? 'var(--accent-color)' : undefined
+                      }}
                       onClick={() => setMaskConfig(prev => ({ ...prev, wrapText: !(prev.wrapText !== false) }))}
                       title="Otomatis membungkus teks ke baris baru sesuai batas lebar kotak"
                     >
                       <WrapText size={14} />
-                      Wrap: {maskConfig.wrapText !== false ? 'AKTIF' : 'OFF'}
+                      Wrap Text: {maskConfig.wrapText !== false ? 'AKTIF' : 'OFF'}
                     </button>
 
                     {/* Text Alignment */}
@@ -528,7 +537,7 @@ export default function SidebarControls({
             {/* Pengaturan Transformasi Ukuran Lebar, Tinggi, & Rotasi */}
             <div className="control-group">
               <div className="control-label">
-                <span>Lebar / Batas Wrap ({maskConfig.maskType === 'text' ? 'Wrap Width' : 'Lebar'})</span>
+                <span>Lebar Kotak ({isTextActive ? 'Batas Wrap Teks' : 'Lebar Bentuk'})</span>
                 <span className="control-val">{maskConfig.width}px</span>
               </div>
               <input
@@ -552,7 +561,7 @@ export default function SidebarControls({
 
             <div className="control-group">
               <div className="control-label">
-                <span>Tinggi ({maskConfig.maskType === 'text' ? 'Tinggi Area Teks' : 'Tinggi Bentuk'})</span>
+                <span>Tinggi Kotak ({isTextActive ? 'Tinggi Area Teks' : 'Tinggi Bentuk'})</span>
                 <span className="control-val">{maskConfig.height}px</span>
               </div>
               <input
@@ -573,9 +582,9 @@ export default function SidebarControls({
                 }}
               />
               <span style={{ fontSize: '0.7rem', color: 'var(--text-subtle)' }}>
-                {maskConfig.maskType === 'text' 
-                  ? 'Menentukan batas vertikal area penempatan dan pemotongan teks' 
-                  : 'Menentukan tinggi / peregangan vertikal bentuk (misal membuat oval/lonjong)'}
+                {isTextActive 
+                  ? 'Menentukan batas vertikal kotak penempatan teks' 
+                  : 'Menentukan tinggi / peregangan vertikal bentuk (misal membuat oval tinggi)'}
               </span>
             </div>
 
