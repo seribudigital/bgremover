@@ -18,7 +18,11 @@ import {
   Diamond,
   Maximize,
   CheckCircle2,
-  MinusCircle
+  MinusCircle,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  WrapText
 } from 'lucide-react';
 
 export default function SidebarControls({
@@ -393,15 +397,15 @@ export default function SidebarControls({
                 )}
               </div>
             ) : (
-              /* Sub-menu Teks (Text Mask Controls) */
+              /* Sub-menu Teks (Text Mask Controls with Wrap Text) */
               <div>
                 <div className="control-group">
-                  <label className="control-label">Input Teks</label>
-                  <input
-                    type="text"
+                  <label className="control-label">Input Teks (Bisa Paragraf)</label>
+                  <textarea
+                    rows={3}
                     value={maskConfig.text}
                     onChange={(e) => setMaskConfig(prev => ({ ...prev, text: e.target.value }))}
-                    placeholder="Ketik teks..."
+                    placeholder="Ketik teks atau kalimat di sini..."
                     style={{
                       width: '100%',
                       padding: '8px 10px',
@@ -410,8 +414,66 @@ export default function SidebarControls({
                       borderRadius: 'var(--radius-sm)',
                       color: 'var(--text-main)',
                       fontFamily: 'inherit',
-                      fontSize: '0.85rem'
+                      fontSize: '0.85rem',
+                      resize: 'vertical'
                     }}
+                  />
+                </div>
+
+                {/* Fitur Wrap Text Toggle & Alignment */}
+                <div className="control-group">
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      className={`btn btn-secondary ${maskConfig.wrapText !== false ? 'active' : ''}`}
+                      style={{ flex: 1, fontSize: '0.75rem', gap: '6px' }}
+                      onClick={() => setMaskConfig(prev => ({ ...prev, wrapText: !(prev.wrapText !== false) }))}
+                      title="Otomatis membungkus teks ke baris baru sesuai batas lebar kotak"
+                    >
+                      <WrapText size={14} />
+                      Wrap: {maskConfig.wrapText !== false ? 'AKTIF' : 'OFF'}
+                    </button>
+
+                    {/* Text Alignment */}
+                    <div style={{ display: 'flex', gap: '2px', backgroundColor: 'var(--bg-tertiary)', padding: '2px', borderRadius: 'var(--radius-sm)' }}>
+                      <button
+                        className={`btn-icon ${maskConfig.textAlign === 'left' ? 'active' : ''}`}
+                        onClick={() => setMaskConfig(prev => ({ ...prev, textAlign: 'left' }))}
+                        title="Rata Kiri"
+                        style={{ padding: '6px' }}
+                      >
+                        <AlignLeft size={14} />
+                      </button>
+                      <button
+                        className={`btn-icon ${(!maskConfig.textAlign || maskConfig.textAlign === 'center') ? 'active' : ''}`}
+                        onClick={() => setMaskConfig(prev => ({ ...prev, textAlign: 'center' }))}
+                        title="Rata Tengah"
+                        style={{ padding: '6px' }}
+                      >
+                        <AlignCenter size={14} />
+                      </button>
+                      <button
+                        className={`btn-icon ${maskConfig.textAlign === 'right' ? 'active' : ''}`}
+                        onClick={() => setMaskConfig(prev => ({ ...prev, textAlign: 'right' }))}
+                        title="Rata Kanan"
+                        style={{ padding: '6px' }}
+                      >
+                        <AlignRight size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="control-group">
+                  <div className="control-label">
+                    <span>Ukuran Huruf (Font Size)</span>
+                    <span className="control-val">{maskConfig.fontSize || 50}px</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="14"
+                    max="250"
+                    value={maskConfig.fontSize || 50}
+                    onChange={(e) => setMaskConfig(prev => ({ ...prev, fontSize: Number(e.target.value) }))}
                   />
                 </div>
 
@@ -463,16 +525,16 @@ export default function SidebarControls({
               </div>
             )}
 
-            {/* Pengaturan Transformasi Ukuran & Rotasi */}
+            {/* Pengaturan Transformasi Ukuran Lebar, Tinggi, & Rotasi */}
             <div className="control-group">
               <div className="control-label">
-                <span>Ukuran Lebar (Width)</span>
+                <span>Lebar / Batas Wrap ({maskConfig.maskType === 'text' ? 'Wrap Width' : 'Lebar'})</span>
                 <span className="control-val">{maskConfig.width}px</span>
               </div>
               <input
                 type="range"
                 min="30"
-                max="1500"
+                max="1800"
                 value={maskConfig.width}
                 onChange={(e) => {
                   const val = Number(e.target.value);
@@ -481,8 +543,7 @@ export default function SidebarControls({
                     return {
                       ...prev,
                       width: val,
-                      height: prev.keepAspect ? Math.round(val * ratio) : prev.height,
-                      fontSize: prev.maskType === 'text' ? Math.round(val * 0.35) : prev.fontSize
+                      height: prev.keepAspect ? Math.max(30, Math.round(val * ratio)) : prev.height
                     };
                   });
                 }}
@@ -491,22 +552,31 @@ export default function SidebarControls({
 
             <div className="control-group">
               <div className="control-label">
-                <span>Ukuran Tinggi (Height)</span>
+                <span>Tinggi ({maskConfig.maskType === 'text' ? 'Tinggi Area Teks' : 'Tinggi Bentuk'})</span>
                 <span className="control-val">{maskConfig.height}px</span>
               </div>
               <input
                 type="range"
                 min="30"
-                max="1500"
+                max="1800"
                 value={maskConfig.height}
                 onChange={(e) => {
                   const val = Number(e.target.value);
-                  setMaskConfig(prev => ({
-                    ...prev,
-                    height: val
-                  }));
+                  setMaskConfig(prev => {
+                    const ratio = prev.width / prev.height;
+                    return {
+                      ...prev,
+                      height: val,
+                      width: prev.keepAspect ? Math.max(30, Math.round(val * ratio)) : prev.width
+                    };
+                  });
                 }}
               />
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-subtle)' }}>
+                {maskConfig.maskType === 'text' 
+                  ? 'Menentukan batas vertikal area penempatan dan pemotongan teks' 
+                  : 'Menentukan tinggi / peregangan vertikal bentuk (misal membuat oval/lonjong)'}
+              </span>
             </div>
 
             <div className="control-group">
@@ -550,6 +620,7 @@ export default function SidebarControls({
                 className={`btn btn-secondary ${maskConfig.keepAspect ? 'active' : ''}`}
                 style={{ flex: 1, fontSize: '0.75rem' }}
                 onClick={() => setMaskConfig(prev => ({ ...prev, keepAspect: !prev.keepAspect }))}
+                title="Kunci rasio lebar dan tinggi agar seimbang saat diubah"
               >
                 Kunci Rasio: {maskConfig.keepAspect ? 'ON' : 'OFF'}
               </button>
@@ -571,7 +642,7 @@ export default function SidebarControls({
             </button>
 
             <p style={{ fontSize: '0.72rem', color: 'var(--text-subtle)', marginTop: '8px', textAlign: 'center' }}>
-              ✨ <em>Tips: Anda juga bisa menggeser, merotasi, dan mengubah ukuran bentuk langsung di atas kanvas!</em>
+              ✨ <em>Tips: Anda juga bisa menggeser, merotasi, dan mengubah ukuran bentuk/teks langsung di atas kanvas!</em>
             </p>
           </div>
         )}

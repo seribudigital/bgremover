@@ -42,17 +42,20 @@ export default function App() {
     shapeType: 'circle',    // 'rect' | 'rounded_rect' | 'circle' | 'star' | 'heart' | 'triangle' | 'hexagon' | 'diamond'
     text: 'STUDIO',
     fontFamily: 'Impact, sans-serif',
-    fontSize: 120,
+    fontSize: 60,
     fontWeight: '900',
     fontStyle: 'normal',
+    wrapText: true,
+    textAlign: 'center',
+    lineHeight: 1.2,
     x: 250,
     y: 250,
-    width: 300,
-    height: 300,
+    width: 350,
+    height: 250,
     rotation: 0,
     feather: 0,
     cornerRadius: 30,
-    keepAspect: true
+    keepAspect: false
   });
 
   const [bgColorType, setBgColorType] = useState('transparent'); // 'transparent' | 'color' | 'image'
@@ -151,14 +154,18 @@ export default function App() {
     const initData = ctx.getImageData(0, 0, canvas.width, canvas.height);
     originalImageDataRef.current = initData;
 
-    const defaultSize = Math.round(Math.min(canvas.width, canvas.height) * 0.55);
+    const defaultWidth = Math.round(Math.min(canvas.width, canvas.height) * 0.6);
+    const defaultHeight = Math.round(Math.min(canvas.width, canvas.height) * 0.45);
     setMaskConfig(prev => ({
       ...prev,
       x: Math.round(canvas.width / 2),
       y: Math.round(canvas.height / 2),
-      width: defaultSize,
-      height: defaultSize,
-      fontSize: Math.max(32, Math.round(defaultSize * 0.35))
+      width: defaultWidth,
+      height: defaultHeight,
+      fontSize: Math.max(24, Math.round(defaultWidth * 0.16)),
+      wrapText: true,
+      textAlign: 'center',
+      keepAspect: false
     }));
 
     historyStackRef.current = [];

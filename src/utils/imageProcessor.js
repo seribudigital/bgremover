@@ -223,7 +223,7 @@ export function applyBrush(targetImageData, originalImageData, centerX, centerY,
 }
 
 /**
- * Menggambar Path Geometris (Bentuk)
+ * Menggambar Path Geometris (Bentuk) dengan skala independen Width & Height
  */
 export function drawShapePath(ctx, shapeType, width, height, cornerRadius = 0) {
   ctx.beginPath();
@@ -236,7 +236,7 @@ export function drawShapePath(ctx, shapeType, width, height, cornerRadius = 0) {
       break;
 
     case 'rounded_rect': {
-      const radius = Math.min(cornerRadius || 20, w2, h2);
+      const radius = Math.min(cornerRadius || 20, Math.abs(w2), Math.abs(h2));
       if (ctx.roundRect) {
         ctx.roundRect(-w2, -h2, width, height, radius);
       } else {
@@ -260,20 +260,18 @@ export function drawShapePath(ctx, shapeType, width, height, cornerRadius = 0) {
 
     case 'star': {
       const points = 5;
-      const outerRadius = Math.min(Math.abs(w2), Math.abs(h2));
-      const innerRadius = outerRadius * 0.45;
       const step = Math.PI / points;
       let rot = (Math.PI / 2) * 3;
 
-      ctx.moveTo(0, -outerRadius);
+      ctx.moveTo(0, -h2);
       for (let i = 0; i < points; i++) {
-        let x = Math.cos(rot) * outerRadius * (w2 / outerRadius);
-        let y = Math.sin(rot) * outerRadius * (h2 / outerRadius);
+        let x = Math.cos(rot) * w2;
+        let y = Math.sin(rot) * h2;
         ctx.lineTo(x, y);
         rot += step;
 
-        x = Math.cos(rot) * innerRadius * (w2 / outerRadius);
-        y = Math.sin(rot) * innerRadius * (h2 / outerRadius);
+        x = Math.cos(rot) * (w2 * 0.45);
+        y = Math.sin(rot) * (h2 * 0.45);
         ctx.lineTo(x, y);
         rot += step;
       }
@@ -326,42 +324,85 @@ export function drawShapePath(ctx, shapeType, width, height, cornerRadius = 0) {
 }
 
 /**
- * Menggambar Teks Kustom pada Context
+ * Memecah teks menjadi baris-baris sesuai batas lebar maksimum (Word Wrap Engine)
  */
-export function drawTextSilhouette(ctx, text, fontSize = 72, fontFamily = 'Impact, sans-serif', fontWeight = 'bold', fontStyle = 'normal') {
+export function getWrappedTextLines(ctx, text, maxWidth, wrapText = true) {
+  const paragraphs = String(text || '').split('\n');
+  if (!wrapText || maxWidth <= 0) {
+    return paragraphs;
+  }
+
+  const allLines = [];
+
+  for (const para of paragraphs) {
+    if (!para.trim()) {
+      allLines.push('');
+      continue;
+    }
+
+    const words = para.split(' ');
+    let currentLine = '';
+
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i];
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const testWidth = ctx ? ctx.measureText(testLine).width : testLine.length * 12;
+
+      if (testWidth <= maxWidth || !currentLine) {
+        currentLine = testLine;
+      } else {
+        allLines.push(currentLine);
+        currentLine = word;
+      }
+    }
+
+    if (currentLine) {
+      allLines.push(currentLine);
+    }
+  }
+
+  return allLines.length > 0 ? allLines : [''];
+}
+
+/**
+ * Menggambar Teks Kustom pada Context dengan Text Wrapping, Alignment, dan Box Bounding
+ */
+export function drawTextSilhouette(ctx, options = {}) {
+  const {
+    text = 'STUDIO',
+    fontSize = 72,
+    fontFamily = 'Impact, sans-serif',
+    fontWeight = 'bold',
+    fontStyle = 'normal',
+    width = 300,
+    wrapText = true,
+    textAlign = 'center',
+    lineHeight = 1.2
+  } = typeof options === 'string' ? { text: options } : options;
+
   ctx.font = `${fontStyle} ${fontWeight} ${fontSize}px ${fontFamily}`;
-  ctx.textAlign = 'center';
+  ctx.textAlign = textAlign;
   ctx.textBaseline = 'middle';
 
-  const lines = String(text || 'TEXT').split('\n');
-  const lineHeight = fontSize * 1.15;
-  const totalHeight = lines.length * lineHeight;
-  const startY = -(totalHeight / 2) + lineHeight / 2;
+  const lines = getWrappedTextLines(ctx, text, width, wrapText);
+  const lineSpacing = fontSize * (lineHeight || 1.2);
+  const totalTextHeight = lines.length * lineSpacing;
+  const startY = -(totalTextHeight / 2) + lineSpacing / 2;
+
+  let xPos = 0;
+  if (textAlign === 'left') {
+    xPos = -width / 2;
+  } else if (textAlign === 'right') {
+    xPos = width / 2;
+  }
 
   lines.forEach((line, idx) => {
-    ctx.fillText(line, 0, startY + idx * lineHeight);
+    ctx.fillText(line, xPos, startY + idx * lineSpacing);
   });
 }
 
 /**
  * Menerapkan Operasi Boolean (Intersection atau Subtract) pada Canvas
- * 
- * @param {HTMLCanvasElement} workingCanvas - Kanvas yang akan dimodifikasi
- * @param {Object} options - Parameter operasi
- * @param {'intersect' | 'subtract'} options.operation - 'intersect' (Crop Inside) atau 'subtract' (Hapus/Lubangi Inside)
- * @param {'shape' | 'text'} options.maskType - 'shape' atau 'text'
- * @param {string} options.shapeType - 'rect' | 'rounded_rect' | 'circle' | 'star' | 'heart' | 'triangle' | 'hexagon' | 'diamond'
- * @param {number} options.x - Titik pusat X
- * @param {number} options.y - Titik pusat Y
- * @param {number} options.width - Lebar bentuk
- * @param {number} options.height - Tinggi bentuk
- * @param {number} options.rotation - Rotasi dalam derajat (0-360)
- * @param {number} options.feather - Kehalusan tepi (0-50 px)
- * @param {number} options.cornerRadius - Radius sudut jika rounded_rect
- * @param {string} options.text - Isi teks jika maskType === 'text'
- * @param {number} options.fontSize - Ukuran font
- * @param {string} options.fontFamily - Family font
- * @param {string} options.fontWeight - Ketebalan font
  */
 export function applyShapeTextOperation(workingCanvas, options) {
   if (!workingCanvas) return;
@@ -380,7 +421,10 @@ export function applyShapeTextOperation(workingCanvas, options) {
     fontSize = 120,
     fontFamily = 'Impact, sans-serif',
     fontWeight = '900',
-    fontStyle = 'normal'
+    fontStyle = 'normal',
+    wrapText = true,
+    textAlign = 'center',
+    lineHeight = 1.2
   } = options;
 
   const w = workingCanvas.width;
@@ -406,7 +450,18 @@ export function applyShapeTextOperation(workingCanvas, options) {
     drawShapePath(mCtx, shapeType, width, height, cornerRadius);
     mCtx.fill();
   } else {
-    drawTextSilhouette(mCtx, text, fontSize, fontFamily, fontWeight, fontStyle);
+    drawTextSilhouette(mCtx, {
+      text,
+      fontSize,
+      fontFamily,
+      fontWeight,
+      fontStyle,
+      width,
+      height,
+      wrapText,
+      textAlign,
+      lineHeight
+    });
   }
   mCtx.restore();
 
@@ -421,11 +476,9 @@ export function applyShapeTextOperation(workingCanvas, options) {
 
   // Lakukan Boolean Composition
   if (operation === 'intersect') {
-    // Hanya simpan yang berada di dalam mask
     tCtx.globalCompositeOperation = 'destination-in';
     tCtx.drawImage(maskCanvas, 0, 0);
   } else if (operation === 'subtract') {
-    // Hapus/lubangi yang berada di dalam mask
     tCtx.globalCompositeOperation = 'destination-out';
     tCtx.drawImage(maskCanvas, 0, 0);
   }

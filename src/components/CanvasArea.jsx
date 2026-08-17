@@ -10,6 +10,7 @@ import {
   Shapes, 
   Sparkles 
 } from 'lucide-react';
+import { getWrappedTextLines } from '../utils/imageProcessor';
 
 export default function CanvasArea({
   originalImage,
@@ -69,10 +70,8 @@ export default function CanvasArea({
     const ctx = canvas.getContext('2d');
 
     if (historySnapshot) {
-      // Pulihkan state riwayat jika ada
       ctx.putImageData(historySnapshot, 0, 0);
     } else {
-      // Inisialisasi awal foto
       ctx.clearRect(0, 0, imgW, imgH);
       ctx.drawImage(originalImage, 0, 0);
       if (onCanvasInit) {
@@ -249,23 +248,17 @@ export default function CanvasArea({
         if (dragAction.includes('s')) newH = Math.max(20, Math.round(dragOrigin.initH + localDy * 2));
         if (dragAction.includes('n')) newH = Math.max(20, Math.round(dragOrigin.initH - localDy * 2));
 
-        if (maskConfig.keepAspect || maskConfig.maskType === 'text') {
+        if (maskConfig.keepAspect) {
           const maxDelta = Math.max(newW / dragOrigin.initW, newH / dragOrigin.initH);
           newW = Math.round(dragOrigin.initW * maxDelta);
           newH = Math.round(dragOrigin.initH * maxDelta);
         }
 
-        setMaskConfig(prev => {
-          const updated = {
-            ...prev,
-            width: newW,
-            height: newH
-          };
-          if (prev.maskType === 'text') {
-            updated.fontSize = Math.max(16, Math.round(dragOrigin.initFontSize * (newW / dragOrigin.initW)));
-          }
-          return updated;
-        });
+        setMaskConfig(prev => ({
+          ...prev,
+          width: newW,
+          height: newH
+        }));
       }
     };
 
@@ -316,19 +309,17 @@ export default function CanvasArea({
         return <ellipse cx={0} cy={0} rx={Math.abs(w2)} ry={Math.abs(h2)} />;
       case 'star': {
         const points = 5;
-        const outerRadius = Math.min(Math.abs(w2), Math.abs(h2));
-        const innerRadius = outerRadius * 0.45;
         const step = Math.PI / points;
         let rot = (Math.PI / 2) * 3;
-        let pathStr = `M 0 ${-outerRadius} `;
+        let pathStr = `M 0 ${-h2} `;
         for (let i = 0; i < points; i++) {
-          let px = Math.cos(rot) * outerRadius * (w2 / outerRadius);
-          let py = Math.sin(rot) * outerRadius * (h2 / outerRadius);
+          let px = Math.cos(rot) * w2;
+          let py = Math.sin(rot) * h2;
           pathStr += `L ${px} ${py} `;
           rot += step;
 
-          px = Math.cos(rot) * innerRadius * (w2 / outerRadius);
-          py = Math.sin(rot) * innerRadius * (h2 / outerRadius);
+          px = Math.cos(rot) * (w2 * 0.45);
+          py = Math.sin(rot) * (h2 * 0.45);
           pathStr += `L ${px} ${py} `;
           rot += step;
         }
@@ -357,6 +348,56 @@ export default function CanvasArea({
       default:
         return <rect x={-w2} y={-h2} width={width} height={height} />;
     }
+  };
+
+  // Render SVG Text dengan dukungan Text Wrap
+  const renderSvgText = () => {
+    if (!maskConfig) return null;
+    const {
+      text = 'STUDIO',
+      fontSize = 50,
+      fontFamily = 'Impact, sans-serif',
+      fontWeight = 'bold',
+      fontStyle = 'normal',
+      width = 300,
+      wrapText = true,
+      textAlign = 'center',
+      lineHeight = 1.2
+    } = maskConfig;
+
+    const lines = getWrappedTextLines(null, text, width, wrapText !== false);
+    const lineSpacing = fontSize * (lineHeight || 1.2);
+    const totalTextHeight = lines.length * lineSpacing;
+    const startY = -(totalTextHeight / 2) + lineSpacing / 2;
+
+    let anchor = 'middle';
+    if (textAlign === 'left') anchor = 'start';
+    if (textAlign === 'right') anchor = 'end';
+
+    return (
+      <text
+        textAnchor={anchor}
+        dominantBaseline="central"
+        fontSize={fontSize}
+        fontFamily={fontFamily}
+        fontWeight={fontWeight}
+        fontStyle={fontStyle}
+        fill={themeFill}
+        stroke={themeColor}
+        strokeWidth="1.5"
+      >
+        {lines.map((line, idx) => {
+          let xPos = 0;
+          if (textAlign === 'left') xPos = -width / 2;
+          if (textAlign === 'right') xPos = width / 2;
+          return (
+            <tspan key={idx} x={xPos} y={startY + idx * lineSpacing}>
+              {line}
+            </tspan>
+          );
+        })}
+      </text>
+    );
   };
 
   const isMaskMode = toolMode === 'shape_mask';
@@ -536,25 +577,7 @@ export default function CanvasArea({
                   strokeWidth="2.5"
                   strokeDasharray="6 4"
                 >
-                  {maskConfig.maskType === 'shape' ? (
-                    renderSvgShape()
-                  ) : (
-                    <text
-                      x={0}
-                      y={0}
-                      textAnchor="middle"
-                      dominantBaseline="central"
-                      fontSize={maskConfig.fontSize || 120}
-                      fontFamily={maskConfig.fontFamily || 'Impact, sans-serif'}
-                      fontWeight={maskConfig.fontWeight || 'bold'}
-                      fontStyle={maskConfig.fontStyle || 'normal'}
-                      fill={themeFill}
-                      stroke={themeColor}
-                      strokeWidth="2"
-                    >
-                      {maskConfig.text || 'STUDIO'}
-                    </text>
-                  )}
+                  {maskConfig.maskType === 'shape' ? renderSvgShape() : renderSvgText()}
                 </g>
 
                 {/* Bounding Box Outline */}
