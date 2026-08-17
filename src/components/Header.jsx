@@ -17,8 +17,15 @@ export default function Header({
         <div className="brand-logo">
           <Layers size={20} />
         </div>
-        <span className="brand-title">BackCut Studio</span>
-        <span className="brand-badge">Pro Studio</span>
+        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="brand-title">Naqi Studio</span>
+            <span className="brand-badge">by GuruAnamf</span>
+          </div>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.1, marginTop: '2px' }}>
+            Pembersih Latar Foto Cepat & Presisi
+          </span>
+        </div>
       </div>
 
       <div className="tool-group">

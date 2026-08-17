@@ -312,7 +312,7 @@ export default function App() {
     const quality = format === 'webp' ? webpQuality / 100 : 0.95;
 
     const link = document.createElement('a');
-    link.download = `backcut-removed.${format}`;
+    link.download = `naqi-studio-removed.${format}`;
     link.href = canvas.toDataURL(mime, quality);
     link.click();
   };
