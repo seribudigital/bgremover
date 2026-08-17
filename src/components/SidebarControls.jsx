@@ -37,7 +37,10 @@ export default function SidebarControls({
   onDefringe,
   isProcessingAI,
   onExportPNG,
-  onExportJPG
+  onExportJPG,
+  onExportWebP,
+  webpQuality,
+  setWebpQuality
 }) {
   const bgFileInputRef = useRef(null);
 
@@ -363,6 +366,35 @@ export default function SidebarControls({
           <button className="btn btn-secondary" onClick={onExportJPG}>
             Download JPG (Dengan Latar)
           </button>
+
+          <div style={{
+            padding: '12px',
+            background: 'var(--bg-tertiary)',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-color)',
+            marginTop: '4px'
+          }}>
+            <div className="control-group" style={{ marginBottom: '12px' }}>
+              <div className="control-label">
+                <span>Kualitas WebP</span>
+                <span className="control-val">{webpQuality}%</span>
+              </div>
+              <input
+                type="range"
+                min="10"
+                max="100"
+                value={webpQuality}
+                onChange={(e) => setWebpQuality(Number(e.target.value))}
+              />
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-subtle)' }}>
+                Semakin rendah = file lebih kecil, kualitas turun
+              </span>
+            </div>
+            <button className="btn btn-primary" style={{ width: '100%' }} onClick={onExportWebP}>
+              <Download size={16} />
+              Download WebP (Ringan & Cepat)
+            </button>
+          </div>
         </div>
       </div>
     </aside>

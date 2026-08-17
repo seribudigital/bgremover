@@ -40,6 +40,7 @@ export default function App() {
 
   const [isProcessingAI, setIsProcessingAI] = useState(false);
   const [isComparing, setIsComparing] = useState(false);
+  const [webpQuality, setWebpQuality] = useState(85);
 
   // Fungsi menyimpan snapshot histori baru
   const pushHistoryState = (canvas) => {
@@ -302,9 +303,17 @@ export default function App() {
   };
 
   const triggerDownload = (canvas, format) => {
+    const mimeTypes = {
+      png: 'image/png',
+      jpg: 'image/jpeg',
+      webp: 'image/webp'
+    };
+    const mime = mimeTypes[format] || 'image/png';
+    const quality = format === 'webp' ? webpQuality / 100 : 0.95;
+
     const link = document.createElement('a');
     link.download = `backcut-removed.${format}`;
-    link.href = canvas.toDataURL(format === 'png' ? 'image/png' : 'image/jpeg', 0.95);
+    link.href = canvas.toDataURL(mime, quality);
     link.click();
   };
 
@@ -370,6 +379,9 @@ export default function App() {
               isProcessingAI={isProcessingAI}
               onExportPNG={() => exportImage('png')}
               onExportJPG={() => exportImage('jpg')}
+              onExportWebP={() => exportImage('webp')}
+              webpQuality={webpQuality}
+              setWebpQuality={setWebpQuality}
             />
           </div>
         )}
