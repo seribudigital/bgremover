@@ -23,9 +23,14 @@ import {
   AlignCenter,
   AlignRight,
   AlignJustify,
-  WrapText
+  WrapText,
+  PenTool,
+  Spline,
+  Plus,
+  Trash2,
+  RotateCcw
 } from 'lucide-react';
-import { calculateAutoFitFontSize } from '../utils/imageProcessor';
+import { calculateAutoFitFontSize, generatePointsFromShape } from '../utils/imageProcessor';
 
 export default function SidebarControls({
   toolMode,
@@ -347,11 +352,11 @@ export default function SidebarControls({
               </div>
             </div>
 
-            {/* Sub-menu Bentuk (Shape Selector) */}
+            {/* Sub-menu Bentuk (Shape Selector & Edit Pointer Mode) */}
             {isShapeActive && (
               <div>
                 <div className="control-group">
-                  <label className="control-label">Pilih Bentuk Geometri</label>
+                  <label className="control-label">Pilih Bentuk Dasar</label>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px', marginTop: '4px' }}>
                     {shapesList.map(shape => {
                       const IconComponent = shape.icon;
@@ -373,7 +378,15 @@ export default function SidebarControls({
                             cursor: 'pointer',
                             fontSize: '0.65rem'
                           }}
-                          onClick={() => setMaskConfig(prev => ({ ...prev, shapeType: shape.id }))}
+                          onClick={() => {
+                            setMaskConfig(prev => {
+                              const next = { ...prev, shapeType: shape.id };
+                              if (prev.isEditPointsMode) {
+                                next.customPoints = generatePointsFromShape(shape.id, prev.width, prev.height, prev.cornerRadius);
+                              }
+                              return next;
+                            });
+                          }}
                         >
                           <IconComponent size={18} />
                           <span>{shape.label}</span>
@@ -383,7 +396,7 @@ export default function SidebarControls({
                   </div>
                 </div>
 
-                {maskConfig.shapeType === 'rounded_rect' && (
+                {maskConfig.shapeType === 'rounded_rect' && !maskConfig.isEditPointsMode && (
                   <div className="control-group">
                     <div className="control-label">
                       <span>Radius Sudut (Corner)</span>
@@ -398,6 +411,179 @@ export default function SidebarControls({
                     />
                   </div>
                 )}
+
+                {/* Panel Khusus: Mode Edit Titik (Pointer / Vertex Editor) */}
+                <div style={{
+                  marginTop: '12px',
+                  padding: '10px',
+                  backgroundColor: maskConfig.isEditPointsMode ? 'var(--accent-alpha)' : 'var(--bg-tertiary)',
+                  borderRadius: 'var(--radius-md)',
+                  border: maskConfig.isEditPointsMode ? '1px solid var(--accent-color)' : '1px solid var(--border-color)',
+                  transition: 'all 0.2s ease'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <PenTool size={16} style={{ color: maskConfig.isEditPointsMode ? 'var(--accent-color)' : 'var(--text-muted)' }} />
+                      <strong style={{ fontSize: '0.8rem', color: maskConfig.isEditPointsMode ? 'var(--accent-color)' : 'var(--text-main)' }}>
+                        Mode Edit Titik (Pointer)
+                      </strong>
+                    </div>
+                    <button
+                      className={`btn ${maskConfig.isEditPointsMode ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ fontSize: '0.7rem', padding: '4px 10px', height: 'auto' }}
+                      onClick={() => {
+                        setMaskConfig(prev => {
+                          const turningOn = !prev.isEditPointsMode;
+                          const pts = turningOn && (!prev.customPoints || prev.customPoints.length < 3)
+                            ? generatePointsFromShape(prev.shapeType, prev.width, prev.height, prev.cornerRadius)
+                            : prev.customPoints;
+                          return {
+                            ...prev,
+                            isEditPointsMode: turningOn,
+                            customPoints: pts || prev.customPoints
+                          };
+                        });
+                      }}
+                    >
+                      {maskConfig.isEditPointsMode ? 'AKTIF' : 'NONAKTIF'}
+                    </button>
+                  </div>
+
+                  {maskConfig.isEditPointsMode ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {/* Pilihan Gaya Garis */}
+                      <div className="control-group" style={{ marginBottom: 0 }}>
+                        <label className="control-label" style={{ fontSize: '0.72rem' }}>Gaya Garis Bentuk</label>
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginTop: '2px' }}>
+                          <button
+                            className={`btn btn-secondary ${maskConfig.curveType !== 'smooth' ? 'active' : ''}`}
+                            style={{
+                              fontSize: '0.72rem',
+                              padding: '6px 4px',
+                              gap: '4px',
+                              borderColor: maskConfig.curveType !== 'smooth' ? 'var(--accent-color)' : undefined
+                            }}
+                            onClick={() => setMaskConfig(prev => ({ ...prev, curveType: 'linear' }))}
+                          >
+                            <strong>Poligon Lurus</strong>
+                          </button>
+                          <button
+                            className={`btn btn-secondary ${maskConfig.curveType === 'smooth' ? 'active' : ''}`}
+                            style={{
+                              fontSize: '0.72rem',
+                              padding: '6px 4px',
+                              gap: '4px',
+                              borderColor: maskConfig.curveType === 'smooth' ? 'var(--accent-color)' : undefined
+                            }}
+                            onClick={() => setMaskConfig(prev => ({ ...prev, curveType: 'smooth' }))}
+                          >
+                            <Spline size={13} />
+                            <strong>Kurva Lentur</strong>
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Info & Aksi Titik Simpul */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        <span>
+                          Jumlah Titik: <strong>{maskConfig.customPoints ? maskConfig.customPoints.length : 0}</strong>
+                        </span>
+                        {maskConfig.selectedPointIndex >= 0 && (
+                          <span style={{ color: '#f1e05a' }}>
+                            Titik #{maskConfig.selectedPointIndex + 1} Terpilih
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ fontSize: '0.7rem', padding: '6px 4px', gap: '4px' }}
+                          onClick={() => {
+                            setMaskConfig(prev => {
+                              const pts = prev.customPoints && prev.customPoints.length >= 3
+                                ? [...prev.customPoints]
+                                : generatePointsFromShape(prev.shapeType, prev.width, prev.height, prev.cornerRadius);
+                              const p0 = pts[0];
+                              const p1 = pts[1];
+                              const midX = Math.round((p0.x + p1.x) / 2);
+                              const midY = Math.round((p0.y + p1.y) / 2);
+                              pts.splice(1, 0, { x: midX, y: midY });
+                              return {
+                                ...prev,
+                                customPoints: pts,
+                                selectedPointIndex: 1
+                              };
+                            });
+                          }}
+                          title="Tambah titik baru di antara simpul"
+                        >
+                          <Plus size={13} /> Tambah Titik
+                        </button>
+
+                        <button
+                          className="btn btn-secondary"
+                          style={{
+                            fontSize: '0.7rem',
+                            padding: '6px 4px',
+                            gap: '4px',
+                            color: maskConfig.selectedPointIndex >= 0 && maskConfig.customPoints && maskConfig.customPoints.length > 3 ? 'var(--danger-color)' : undefined
+                          }}
+                          disabled={maskConfig.selectedPointIndex < 0 || !maskConfig.customPoints || maskConfig.customPoints.length <= 3}
+                          onClick={() => {
+                            if (maskConfig.selectedPointIndex >= 0) {
+                              setMaskConfig(prev => {
+                                if (!prev.customPoints || prev.customPoints.length <= 3) return prev;
+                                const nextPts = prev.customPoints.filter((_, i) => i !== prev.selectedPointIndex);
+                                return {
+                                  ...prev,
+                                  customPoints: nextPts,
+                                  selectedPointIndex: -1
+                                };
+                              });
+                            }
+                          }}
+                          title={maskConfig.selectedPointIndex >= 0 ? 'Hapus titik terpilih' : 'Pilih titik di kanvas terlebih dahulu'}
+                        >
+                          <Trash2 size={13} /> Hapus Titik
+                        </button>
+                      </div>
+
+                      <button
+                        className="btn btn-secondary"
+                        style={{ fontSize: '0.7rem', padding: '5px 4px', gap: '4px', width: '100%' }}
+                        onClick={() => {
+                          setMaskConfig(prev => ({
+                            ...prev,
+                            customPoints: generatePointsFromShape(prev.shapeType, prev.width, prev.height, prev.cornerRadius),
+                            selectedPointIndex: -1
+                          }));
+                        }}
+                        title="Kembalikan titik simpul ke bentuk preset asli"
+                      >
+                        <RotateCcw size={12} /> Reset ke Bentuk Dasar
+                      </button>
+
+                      <div style={{
+                        backgroundColor: 'rgba(0,0,0,0.2)',
+                        padding: '6px 8px',
+                        borderRadius: 'var(--radius-sm)',
+                        fontSize: '0.68rem',
+                        lineHeight: 1.4,
+                        color: 'var(--text-muted)'
+                      }}>
+                        💡 <strong>Tips Kanvas:</strong><br />
+                        • <strong>Drag titik</strong> untuk membentuk pola unik.<br />
+                        • Klik ikon <strong>(+)</strong> pada garis untuk menambah titik.<br />
+                        • <strong>Klik ganda / klik kanan</strong> pada titik untuk menghapus.
+                      </div>
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: 0 }}>
+                      Aktifkan untuk menarik setiap sudut simpul dan membuat bentuk unik bebas!
+                    </p>
+                  )}
+                </div>
               </div>
             )}
 

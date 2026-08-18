@@ -234,9 +234,189 @@ export function applyBrush(targetImageData, originalImageData, centerX, centerY,
 }
 
 /**
+ * Menghasilkan titik simpul (points) awal berdasarkan bentuk preset
+ */
+export function generatePointsFromShape(shapeType, width, height, cornerRadius = 20) {
+  const w2 = width / 2;
+  const h2 = height / 2;
+  const pts = [];
+
+  switch (shapeType) {
+    case 'rect':
+      pts.push({ x: -w2, y: -h2 });
+      pts.push({ x: w2, y: -h2 });
+      pts.push({ x: w2, y: h2 });
+      pts.push({ x: -w2, y: h2 });
+      break;
+
+    case 'rounded_rect': {
+      const r = Math.min(cornerRadius || 20, Math.abs(w2), Math.abs(h2));
+      pts.push({ x: -w2 + r, y: -h2 });
+      pts.push({ x: w2 - r, y: -h2 });
+      pts.push({ x: w2, y: -h2 + r });
+      pts.push({ x: w2, y: h2 - r });
+      pts.push({ x: w2 - r, y: h2 });
+      pts.push({ x: -w2 + r, y: h2 });
+      pts.push({ x: -w2, y: h2 - r });
+      pts.push({ x: -w2, y: -h2 + r });
+      break;
+    }
+
+    case 'circle':
+    case 'ellipse': {
+      const numPts = 12;
+      for (let i = 0; i < numPts; i++) {
+        const a = (i * 2 * Math.PI) / numPts;
+        pts.push({
+          x: Math.round(w2 * Math.cos(a) * 10) / 10,
+          y: Math.round(h2 * Math.sin(a) * 10) / 10
+        });
+      }
+      break;
+    }
+
+    case 'star': {
+      const points = 5;
+      const step = Math.PI / points;
+      let rot = (Math.PI / 2) * 3;
+      for (let i = 0; i < points; i++) {
+        pts.push({
+          x: Math.round(Math.cos(rot) * w2 * 10) / 10,
+          y: Math.round(Math.sin(rot) * h2 * 10) / 10
+        });
+        rot += step;
+        pts.push({
+          x: Math.round(Math.cos(rot) * (w2 * 0.45) * 10) / 10,
+          y: Math.round(Math.sin(rot) * (h2 * 0.45) * 10) / 10
+        });
+        rot += step;
+      }
+      break;
+    }
+
+    case 'heart': {
+      const sx = w2 / 100;
+      const sy = h2 / 100;
+      pts.push({ x: 0, y: -35 * sy });
+      pts.push({ x: 35 * sx, y: -75 * sy });
+      pts.push({ x: 80 * sx, y: -70 * sy });
+      pts.push({ x: 95 * sx, y: -30 * sy });
+      pts.push({ x: 75 * sx, y: 20 * sy });
+      pts.push({ x: 35 * sx, y: 60 * sy });
+      pts.push({ x: 0, y: 95 * sy });
+      pts.push({ x: -35 * sx, y: 60 * sy });
+      pts.push({ x: -75 * sx, y: 20 * sy });
+      pts.push({ x: -95 * sx, y: -30 * sy });
+      pts.push({ x: -80 * sx, y: -70 * sy });
+      pts.push({ x: -35 * sx, y: -75 * sy });
+      break;
+    }
+
+    case 'triangle':
+      pts.push({ x: 0, y: -h2 });
+      pts.push({ x: w2, y: h2 });
+      pts.push({ x: -w2, y: h2 });
+      break;
+
+    case 'hexagon': {
+      const sides = 6;
+      for (let i = 0; i < sides; i++) {
+        const a = (i * 2 * Math.PI) / sides;
+        pts.push({
+          x: Math.round(w2 * Math.cos(a) * 10) / 10,
+          y: Math.round(h2 * Math.sin(a) * 10) / 10
+        });
+      }
+      break;
+    }
+
+    case 'diamond':
+      pts.push({ x: 0, y: -h2 });
+      pts.push({ x: w2, y: 0 });
+      pts.push({ x: 0, y: h2 });
+      pts.push({ x: -w2, y: 0 });
+      break;
+
+    default:
+      pts.push({ x: -w2, y: -h2 });
+      pts.push({ x: w2, y: -h2 });
+      pts.push({ x: w2, y: h2 });
+      pts.push({ x: -w2, y: h2 });
+      break;
+  }
+
+  return pts;
+}
+
+/**
+ * Menggambar Path Poligon atau Kurva Kustom dari Array Titik
+ */
+export function drawCustomPointsPath(ctx, points, curveType = 'linear') {
+  if (!points || points.length < 3) return;
+  const len = points.length;
+
+  ctx.beginPath();
+
+  if (curveType === 'smooth') {
+    const pPrev = points[len - 1];
+    const p0 = points[0];
+    ctx.moveTo((pPrev.x + p0.x) / 2, (pPrev.y + p0.y) / 2);
+    for (let i = 0; i < len; i++) {
+      const curr = points[i];
+      const next = points[(i + 1) % len];
+      const midX = (curr.x + next.x) / 2;
+      const midY = (curr.y + next.y) / 2;
+      ctx.quadraticCurveTo(curr.x, curr.y, midX, midY);
+    }
+    ctx.closePath();
+  } else {
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 1; i < len; i++) {
+      ctx.lineTo(points[i].x, points[i].y);
+    }
+    ctx.closePath();
+  }
+}
+
+/**
+ * Menghasilkan SVG Path string (d) untuk kurva atau poligon titik kustom
+ */
+export function getCustomPointsSvgPath(points, curveType = 'linear') {
+  if (!points || points.length < 3) return '';
+  const len = points.length;
+
+  if (curveType === 'smooth') {
+    const pPrev = points[len - 1];
+    const p0 = points[0];
+    let d = `M ${(pPrev.x + p0.x) / 2} ${(pPrev.y + p0.y) / 2} `;
+    for (let i = 0; i < len; i++) {
+      const curr = points[i];
+      const next = points[(i + 1) % len];
+      const midX = (curr.x + next.x) / 2;
+      const midY = (curr.y + next.y) / 2;
+      d += `Q ${curr.x} ${curr.y}, ${midX} ${midY} `;
+    }
+    d += 'Z';
+    return d;
+  } else {
+    let d = `M ${points[0].x} ${points[0].y} `;
+    for (let i = 1; i < len; i++) {
+      d += `L ${points[i].x} ${points[i].y} `;
+    }
+    d += 'Z';
+    return d;
+  }
+}
+
+/**
  * Menggambar Path Geometris (Bentuk) dengan skala independen Width & Height
  */
-export function drawShapePath(ctx, shapeType, width, height, cornerRadius = 0) {
+export function drawShapePath(ctx, shapeType, width, height, cornerRadius = 0, customPoints = null, curveType = 'linear', isEditPointsMode = false) {
+  if ((isEditPointsMode || shapeType === 'custom') && customPoints && customPoints.length >= 3) {
+    drawCustomPointsPath(ctx, customPoints, curveType);
+    return;
+  }
+
   ctx.beginPath();
   const w2 = width / 2;
   const h2 = height / 2;
@@ -559,6 +739,9 @@ export function applyShapeTextOperation(workingCanvas, options) {
     rotation = 0,
     feather = 0,
     cornerRadius = 20,
+    customPoints = null,
+    curveType = 'linear',
+    isEditPointsMode = false,
     text = 'STUDIO',
     fontSize = 60,
     fontFamily = 'Impact, sans-serif',
@@ -590,7 +773,7 @@ export function applyShapeTextOperation(workingCanvas, options) {
   mCtx.fillStyle = '#000000';
 
   if (maskType === 'shape') {
-    drawShapePath(mCtx, shapeType, width, height, cornerRadius);
+    drawShapePath(mCtx, shapeType, width, height, cornerRadius, customPoints, curveType, isEditPointsMode);
     mCtx.fill();
   } else {
     drawTextSilhouette(mCtx, {

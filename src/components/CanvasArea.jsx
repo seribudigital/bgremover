@@ -9,9 +9,18 @@ import {
   Eraser, 
   Shapes, 
   Type,
-  Sparkles 
+  Sparkles,
+  PenTool,
+  MousePointer2,
+  Spline,
+  Plus,
+  Trash2
 } from 'lucide-react';
-import { drawTextSilhouette } from '../utils/imageProcessor';
+import { 
+  drawTextSilhouette, 
+  generatePointsFromShape, 
+  getCustomPointsSvgPath 
+} from '../utils/imageProcessor';
 
 export default function CanvasArea({
   originalImage,
@@ -189,7 +198,7 @@ export default function CanvasArea({
     };
   }, [workingCanvasRef]);
 
-  // Transform Gizmo Mouse Handlers (Move, Resize, Rotate)
+  // Transform Gizmo Mouse Handlers (Move, Resize, Rotate, and Drag Point)
   const handleTransformStart = (e, action) => {
     e.stopPropagation();
     e.preventDefault();
@@ -209,6 +218,58 @@ export default function CanvasArea({
     });
   };
 
+  const handlePointDragStart = (e, index) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!maskConfig) return;
+
+    setMaskConfig(prev => ({ ...prev, selectedPointIndex: index }));
+    setDragAction(`point_${index}`);
+    setDragOrigin({
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      initPoints: maskConfig.customPoints ? [...maskConfig.customPoints] : []
+    });
+  };
+
+  const handleInsertPoint = (e, index, midX, midY) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!maskConfig) return;
+
+    const currentPts = maskConfig.customPoints && maskConfig.customPoints.length >= 3
+      ? [...maskConfig.customPoints]
+      : generatePointsFromShape(maskConfig.shapeType, maskConfig.width, maskConfig.height, maskConfig.cornerRadius);
+
+    const nextPts = [...currentPts];
+    nextPts.splice(index + 1, 0, { x: Math.round(midX), y: Math.round(midY) });
+
+    setMaskConfig(prev => ({
+      ...prev,
+      customPoints: nextPts,
+      isEditPointsMode: true,
+      selectedPointIndex: index + 1
+    }));
+  };
+
+  const handleDeletePoint = (e, index) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!maskConfig || !maskConfig.customPoints) return;
+
+    if (maskConfig.customPoints.length <= 3) {
+      alert('Bentuk harus memiliki minimal 3 titik.');
+      return;
+    }
+
+    const nextPts = maskConfig.customPoints.filter((_, i) => i !== index);
+    setMaskConfig(prev => ({
+      ...prev,
+      customPoints: nextPts,
+      selectedPointIndex: -1
+    }));
+  };
+
   useEffect(() => {
     if (!dragAction || !maskConfig || !setMaskConfig) return;
 
@@ -217,7 +278,27 @@ export default function CanvasArea({
       const dx = coords.x - dragOrigin.mouseX;
       const dy = coords.y - dragOrigin.mouseY;
 
-      if (dragAction === 'move') {
+      if (dragAction.startsWith('point_')) {
+        const pIndex = parseInt(dragAction.replace('point_', ''), 10);
+        const relX = coords.x - maskConfig.x;
+        const relY = coords.y - maskConfig.y;
+        const rad = -((maskConfig.rotation || 0) * Math.PI) / 180;
+        const localX = Math.round(relX * Math.cos(rad) - relY * Math.sin(rad));
+        const localY = Math.round(relX * Math.sin(rad) + relY * Math.cos(rad));
+
+        setMaskConfig(prev => {
+          const currentPts = prev.customPoints && prev.customPoints.length >= 3
+            ? [...prev.customPoints]
+            : generatePointsFromShape(prev.shapeType, prev.width, prev.height, prev.cornerRadius);
+          const nextPts = [...currentPts];
+          nextPts[pIndex] = { x: localX, y: localY };
+          return {
+            ...prev,
+            customPoints: nextPts,
+            isEditPointsMode: true
+          };
+        });
+      } else if (dragAction === 'move') {
         setMaskConfig(prev => ({
           ...prev,
           x: Math.round(dragOrigin.initX + dx),
@@ -296,7 +377,13 @@ export default function CanvasArea({
   // Render SVG Path untuk bentuk mask
   const renderSvgShape = () => {
     if (!maskConfig) return null;
-    const { shapeType, width, height, cornerRadius = 20 } = maskConfig;
+    const { shapeType, width, height, cornerRadius = 20, isEditPointsMode, customPoints, curveType } = maskConfig;
+
+    if ((isEditPointsMode || shapeType === 'custom') && customPoints && customPoints.length >= 3) {
+      const d = getCustomPointsSvgPath(customPoints, curveType || 'linear');
+      return <path d={d} />;
+    }
+
     const w2 = width / 2;
     const h2 = height / 2;
 
@@ -474,6 +561,57 @@ export default function CanvasArea({
               <span>AI</span>
             </button>
           </div>
+
+          {/* Quick Shape Edit Pointer Toggle when Shape is active */}
+          {isShapeActive && maskConfig && (
+            <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-tertiary)', padding: '2px', borderRadius: 'var(--radius-md)' }}>
+              <button
+                className={`btn btn-icon ${maskConfig.isEditPointsMode ? 'active' : ''}`}
+                onClick={() => {
+                  setMaskConfig(prev => {
+                    const turningOn = !prev.isEditPointsMode;
+                    const pts = turningOn && (!prev.customPoints || prev.customPoints.length < 3)
+                      ? generatePointsFromShape(prev.shapeType, prev.width, prev.height, prev.cornerRadius)
+                      : prev.customPoints;
+                    return {
+                      ...prev,
+                      isEditPointsMode: turningOn,
+                      customPoints: pts || prev.customPoints
+                    };
+                  });
+                }}
+                title="Aktifkan Edit Titik (Pointer) untuk mengubah simpul bentuk secara bebas"
+                style={{
+                  fontSize: '0.75rem',
+                  gap: '4px',
+                  padding: '5px 10px',
+                  backgroundColor: maskConfig.isEditPointsMode ? 'var(--accent-alpha)' : undefined,
+                  color: maskConfig.isEditPointsMode ? 'var(--accent-color)' : undefined,
+                  fontWeight: 600
+                }}
+              >
+                <PenTool size={14} />
+                <span>Edit Titik: {maskConfig.isEditPointsMode ? 'ON' : 'OFF'}</span>
+              </button>
+
+              {maskConfig.isEditPointsMode && (
+                <button
+                  className="btn btn-icon"
+                  onClick={() => {
+                    setMaskConfig(prev => ({
+                      ...prev,
+                      curveType: prev.curveType === 'smooth' ? 'linear' : 'smooth'
+                    }));
+                  }}
+                  title="Ganti antara Poligon Garis Lurus atau Kurva Lentur Halus"
+                  style={{ fontSize: '0.75rem', gap: '4px', padding: '5px 10px' }}
+                >
+                  <Spline size={14} />
+                  <span>{maskConfig.curveType === 'smooth' ? 'Kurva Halus' : 'Garis Lurus'}</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Zoom & Compare Controls */}
@@ -595,33 +733,190 @@ export default function CanvasArea({
                   )}
                 </g>
 
-                {/* Bounding Box Outline */}
-                <rect
-                  x={-maskConfig.width / 2}
-                  y={-maskConfig.height / 2}
-                  width={maskConfig.width}
-                  height={maskConfig.height}
-                  fill="none"
-                  stroke={themeColor}
-                  strokeWidth="1.5"
-                  strokeDasharray="3 3"
-                  opacity="0.8"
-                  style={{ pointerEvents: 'none' }}
-                />
+                {/* Mode Edit Titik (Vector Vertex Handles & Midpoint Add Buttons) */}
+                {maskConfig.maskType === 'shape' && maskConfig.isEditPointsMode && maskConfig.customPoints && maskConfig.customPoints.length >= 3 ? (
+                  <>
+                    {/* Midpoint '+' Handles to Add New Points */}
+                    {maskConfig.customPoints.map((pt, i) => {
+                      const nextPt = maskConfig.customPoints[(i + 1) % maskConfig.customPoints.length];
+                      const mx = (pt.x + nextPt.x) / 2;
+                      const my = (pt.y + nextPt.y) / 2;
+                      return (
+                        <g
+                          key={`mid_${i}`}
+                          onMouseDown={(e) => handleInsertPoint(e, i, mx, my)}
+                          style={{ cursor: 'copy' }}
+                        >
+                          <title>Klik untuk menyisipkan titik baru</title>
+                          <circle
+                            cx={mx}
+                            cy={my}
+                            r="6"
+                            fill="#ffffff"
+                            stroke={themeColor}
+                            strokeWidth="1.5"
+                          />
+                          <line x1={mx - 3} y1={my} x2={mx + 3} y2={my} stroke={themeColor} strokeWidth="1.5" strokeLinecap="round" />
+                          <line x1={mx} y1={my - 3} x2={mx} y2={my + 3} stroke={themeColor} strokeWidth="1.5" strokeLinecap="round" />
+                        </g>
+                      );
+                    })}
 
-                {/* Center Move Anchor */}
+                    {/* Interactive Vertex Nodes (Points) */}
+                    {maskConfig.customPoints.map((pt, i) => {
+                      const isSelected = maskConfig.selectedPointIndex === i;
+                      return (
+                        <g
+                          key={`pt_${i}`}
+                          onMouseDown={(e) => handlePointDragStart(e, i)}
+                          onContextMenu={(e) => handleDeletePoint(e, i)}
+                          onDoubleClick={(e) => handleDeletePoint(e, i)}
+                          style={{ cursor: 'grab' }}
+                        >
+                          <title>{`Titik #${i + 1} (Drag untuk geser, Klik kanan / Double-click untuk hapus)`}</title>
+                          <circle
+                            cx={pt.x}
+                            cy={pt.y}
+                            r={isSelected ? 9 : 7}
+                            fill={isSelected ? '#f1e05a' : '#ffffff'}
+                            stroke={themeColor}
+                            strokeWidth={isSelected ? 3 : 2.5}
+                          />
+                          <circle
+                            cx={pt.x}
+                            cy={pt.y}
+                            r="2.5"
+                            fill={isSelected ? '#000000' : themeColor}
+                          />
+                        </g>
+                      );
+                    })}
+                  </>
+                ) : (
+                  <>
+                    {/* Bounding Box Outline */}
+                    <rect
+                      x={-maskConfig.width / 2}
+                      y={-maskConfig.height / 2}
+                      width={maskConfig.width}
+                      height={maskConfig.height}
+                      fill="none"
+                      stroke={themeColor}
+                      strokeWidth="1.5"
+                      strokeDasharray="3 3"
+                      opacity="0.8"
+                      style={{ pointerEvents: 'none' }}
+                    />
+
+                    {/* 4 Corner Resize Handles */}
+                    <rect
+                      x={-maskConfig.width / 2 - 5}
+                      y={-maskConfig.height / 2 - 5}
+                      width="10"
+                      height="10"
+                      fill="#ffffff"
+                      stroke={themeColor}
+                      strokeWidth="2"
+                      onMouseDown={(e) => handleTransformStart(e, 'nw')}
+                      style={{ cursor: 'nwse-resize' }}
+                    />
+                    <rect
+                      x={maskConfig.width / 2 - 5}
+                      y={-maskConfig.height / 2 - 5}
+                      width="10"
+                      height="10"
+                      fill="#ffffff"
+                      stroke={themeColor}
+                      strokeWidth="2"
+                      onMouseDown={(e) => handleTransformStart(e, 'ne')}
+                      style={{ cursor: 'nesw-resize' }}
+                    />
+                    <rect
+                      x={maskConfig.width / 2 - 5}
+                      y={maskConfig.height / 2 - 5}
+                      width="10"
+                      height="10"
+                      fill="#ffffff"
+                      stroke={themeColor}
+                      strokeWidth="2"
+                      onMouseDown={(e) => handleTransformStart(e, 'se')}
+                      style={{ cursor: 'nwse-resize' }}
+                    />
+                    <rect
+                      x={-maskConfig.width / 2 - 5}
+                      y={maskConfig.height / 2 - 5}
+                      width="10"
+                      height="10"
+                      fill="#ffffff"
+                      stroke={themeColor}
+                      strokeWidth="2"
+                      onMouseDown={(e) => handleTransformStart(e, 'sw')}
+                      style={{ cursor: 'nesw-resize' }}
+                    />
+
+                    {/* 4 Edge Resize Handles */}
+                    <rect
+                      x={-5}
+                      y={-maskConfig.height / 2 - 4}
+                      width="10"
+                      height="8"
+                      fill="#ffffff"
+                      stroke={themeColor}
+                      strokeWidth="1.5"
+                      onMouseDown={(e) => handleTransformStart(e, 'n')}
+                      style={{ cursor: 'ns-resize' }}
+                    />
+                    <rect
+                      x={-5}
+                      y={maskConfig.height / 2 - 4}
+                      width="10"
+                      height="8"
+                      fill="#ffffff"
+                      stroke={themeColor}
+                      strokeWidth="1.5"
+                      onMouseDown={(e) => handleTransformStart(e, 's')}
+                      style={{ cursor: 'ns-resize' }}
+                    />
+                    <rect
+                      x={maskConfig.width / 2 - 4}
+                      y={-4}
+                      width="8"
+                      height="10"
+                      fill="#ffffff"
+                      stroke={themeColor}
+                      strokeWidth="1.5"
+                      onMouseDown={(e) => handleTransformStart(e, 'e')}
+                      style={{ cursor: 'ew-resize' }}
+                    />
+                    <rect
+                      x={-maskConfig.width / 2 - 4}
+                      y={-4}
+                      width="8"
+                      height="10"
+                      fill="#ffffff"
+                      stroke={themeColor}
+                      strokeWidth="1.5"
+                      onMouseDown={(e) => handleTransformStart(e, 'w')}
+                      style={{ cursor: 'ew-resize' }}
+                    />
+                  </>
+                )}
+
+                {/* Center Move Anchor (Always Accessible) */}
                 <circle
                   cx={0}
                   cy={0}
-                  r="6"
+                  r="6.5"
                   fill="#ffffff"
                   stroke={themeColor}
                   strokeWidth="2.5"
                   onMouseDown={(e) => handleTransformStart(e, 'move')}
                   style={{ cursor: 'move' }}
-                />
+                >
+                  <title>Pusat Bentuk (Drag untuk menggeser posisi)</title>
+                </circle>
 
-                {/* Rotation Handle Line & Knob */}
+                {/* Rotation Handle Line & Knob (Always Accessible) */}
                 <line
                   x1={0}
                   y1={-maskConfig.height / 2}
@@ -639,99 +934,9 @@ export default function CanvasArea({
                   strokeWidth="2"
                   onMouseDown={(e) => handleTransformStart(e, 'rotate')}
                   style={{ cursor: 'grab' }}
-                />
-
-                {/* 4 Corner Resize Handles */}
-                <rect
-                  x={-maskConfig.width / 2 - 5}
-                  y={-maskConfig.height / 2 - 5}
-                  width="10"
-                  height="10"
-                  fill="#ffffff"
-                  stroke={themeColor}
-                  strokeWidth="2"
-                  onMouseDown={(e) => handleTransformStart(e, 'nw')}
-                  style={{ cursor: 'nwse-resize' }}
-                />
-                <rect
-                  x={maskConfig.width / 2 - 5}
-                  y={-maskConfig.height / 2 - 5}
-                  width="10"
-                  height="10"
-                  fill="#ffffff"
-                  stroke={themeColor}
-                  strokeWidth="2"
-                  onMouseDown={(e) => handleTransformStart(e, 'ne')}
-                  style={{ cursor: 'nesw-resize' }}
-                />
-                <rect
-                  x={maskConfig.width / 2 - 5}
-                  y={maskConfig.height / 2 - 5}
-                  width="10"
-                  height="10"
-                  fill="#ffffff"
-                  stroke={themeColor}
-                  strokeWidth="2"
-                  onMouseDown={(e) => handleTransformStart(e, 'se')}
-                  style={{ cursor: 'nwse-resize' }}
-                />
-                <rect
-                  x={-maskConfig.width / 2 - 5}
-                  y={maskConfig.height / 2 - 5}
-                  width="10"
-                  height="10"
-                  fill="#ffffff"
-                  stroke={themeColor}
-                  strokeWidth="2"
-                  onMouseDown={(e) => handleTransformStart(e, 'sw')}
-                  style={{ cursor: 'nesw-resize' }}
-                />
-
-                {/* 4 Edge Resize Handles */}
-                <rect
-                  x={-5}
-                  y={-maskConfig.height / 2 - 4}
-                  width="10"
-                  height="8"
-                  fill="#ffffff"
-                  stroke={themeColor}
-                  strokeWidth="1.5"
-                  onMouseDown={(e) => handleTransformStart(e, 'n')}
-                  style={{ cursor: 'ns-resize' }}
-                />
-                <rect
-                  x={-5}
-                  y={maskConfig.height / 2 - 4}
-                  width="10"
-                  height="8"
-                  fill="#ffffff"
-                  stroke={themeColor}
-                  strokeWidth="1.5"
-                  onMouseDown={(e) => handleTransformStart(e, 's')}
-                  style={{ cursor: 'ns-resize' }}
-                />
-                <rect
-                  x={maskConfig.width / 2 - 4}
-                  y={-4}
-                  width="8"
-                  height="10"
-                  fill="#ffffff"
-                  stroke={themeColor}
-                  strokeWidth="1.5"
-                  onMouseDown={(e) => handleTransformStart(e, 'e')}
-                  style={{ cursor: 'ew-resize' }}
-                />
-                <rect
-                  x={-maskConfig.width / 2 - 4}
-                  y={-4}
-                  width="8"
-                  height="10"
-                  fill="#ffffff"
-                  stroke={themeColor}
-                  strokeWidth="1.5"
-                  onMouseDown={(e) => handleTransformStart(e, 'w')}
-                  style={{ cursor: 'ew-resize' }}
-                />
+                >
+                  <title>Handle Rotasi (Drag untuk memutar bentuk)</title>
+                </circle>
               </g>
             </svg>
           )}

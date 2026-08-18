@@ -56,7 +56,11 @@ export default function App() {
     rotation: 0,
     feather: 0,
     cornerRadius: 30,
-    keepAspect: false
+    keepAspect: false,
+    isEditPointsMode: false,
+    customPoints: null,
+    curveType: 'linear',
+    selectedPointIndex: -1
   });
 
   const [bgColorType, setBgColorType] = useState('transparent'); // 'transparent' | 'color' | 'image'
