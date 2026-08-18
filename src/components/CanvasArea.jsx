@@ -554,7 +554,7 @@ export default function CanvasArea({
           />
 
           {/* Interactive Transform Overlay for Shape / Text Masking */}
-          {isMaskMode && maskConfig && baseCanvasSize.width > 0 && (
+          {isMaskMode && maskConfig && baseCanvasSize.width > 0 && (maskConfig.maskType !== 'text' || (maskConfig.text && maskConfig.text.trim().length > 0)) && (
             <svg
               ref={svgOverlayRef}
               viewBox={`0 0 ${baseCanvasSize.width} ${baseCanvasSize.height}`}

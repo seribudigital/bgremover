@@ -698,19 +698,32 @@ export default function SidebarControls({
             </div>
 
             {/* Tombol Eksekusi Masking */}
-            <button
-              className={`btn ${maskConfig.operation === 'intersect' ? 'btn-primary' : ''}`}
-              style={{
-                width: '100%',
-                marginTop: '14px',
-                backgroundColor: maskConfig.operation === 'subtract' ? 'var(--danger-color)' : undefined,
-                color: '#ffffff'
-              }}
-              onClick={onApplyMask}
-            >
-              <Scissors size={16} />
-              {maskConfig.operation === 'intersect' ? 'Terapkan Intersection (Crop)' : 'Terapkan Subtract (Lubangi)'}
-            </button>
+            {(() => {
+              const isTextEmpty = isTextActive && (!maskConfig.text || !maskConfig.text.trim());
+              return (
+                <button
+                  className={`btn ${maskConfig.operation === 'intersect' ? 'btn-primary' : ''}`}
+                  style={{
+                    width: '100%',
+                    marginTop: '14px',
+                    backgroundColor: isTextEmpty
+                      ? undefined
+                      : maskConfig.operation === 'subtract'
+                        ? 'var(--danger-color)'
+                        : undefined,
+                    color: '#ffffff',
+                    opacity: isTextEmpty ? 0.4 : 1,
+                    cursor: isTextEmpty ? 'not-allowed' : 'pointer'
+                  }}
+                  onClick={onApplyMask}
+                  disabled={isTextEmpty}
+                  title={isTextEmpty ? 'Ketik teks terlebih dahulu untuk menerapkan mask' : undefined}
+                >
+                  <Scissors size={16} />
+                  {maskConfig.operation === 'intersect' ? 'Terapkan Intersection (Crop)' : 'Terapkan Subtract (Lubangi)'}
+                </button>
+              );
+            })()}
 
             <p style={{ fontSize: '0.72rem', color: 'var(--text-subtle)', marginTop: '8px', textAlign: 'center' }}>
               ✨ <em>Tips: Anda juga bisa menggeser, merotasi, dan mengubah ukuran bentuk/teks langsung di atas kanvas!</em>

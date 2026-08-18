@@ -261,6 +261,14 @@ export default function App() {
     if (!canvas) return;
     applyShapeTextOperation(canvas, maskConfig);
     pushHistoryState(canvas);
+
+    // Hapus teks otomatis setelah eksekusi agar hasil masking langsung terlihat bersih
+    if (maskConfig.maskType === 'text' || toolMode === 'text') {
+      setMaskConfig(prev => ({
+        ...prev,
+        text: ''
+      }));
+    }
   };
 
   const handleCenterMask = () => {
