@@ -30,7 +30,7 @@ import {
   Trash2,
   RotateCcw
 } from 'lucide-react';
-import { calculateAutoFitFontSize, generatePointsFromShape } from '../utils/imageProcessor';
+import { calculateAutoFitFontSize, generatePointsFromShape, computeSmoothTangents } from '../utils/imageProcessor';
 
 export default function SidebarControls({
   toolMode,
@@ -495,6 +495,79 @@ export default function SidebarControls({
                         )}
                       </div>
 
+                      {/* Kontrol Kendali Khusus untuk Titik Terpilih */}
+                      {maskConfig.selectedPointIndex >= 0 && maskConfig.customPoints && maskConfig.customPoints[maskConfig.selectedPointIndex] && (
+                        <div style={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                          padding: '6px 8px',
+                          borderRadius: 'var(--radius-sm)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px'
+                        }}>
+                          <div style={{ fontSize: '0.7rem', color: '#f1e05a', fontWeight: 600 }}>
+                            ⚙️ Kendali Titik #{maskConfig.selectedPointIndex + 1}:
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
+                            <button
+                              className={`btn btn-secondary ${maskConfig.customPoints[maskConfig.selectedPointIndex].handleMode !== 'corner' ? 'active' : ''}`}
+                              style={{ fontSize: '0.68rem', padding: '4px 2px' }}
+                              onClick={() => {
+                                setMaskConfig(prev => {
+                                  const pts = [...prev.customPoints];
+                                  pts[prev.selectedPointIndex] = {
+                                    ...pts[prev.selectedPointIndex],
+                                    handleMode: 'smooth'
+                                  };
+                                  return { ...prev, customPoints: pts };
+                                });
+                              }}
+                              title="Kedua kendali sejajar membentuk kelengkungan mulus"
+                            >
+                              Lentur (Mulus)
+                            </button>
+                            <button
+                              className={`btn btn-secondary ${maskConfig.customPoints[maskConfig.selectedPointIndex].handleMode === 'corner' ? 'active' : ''}`}
+                              style={{ fontSize: '0.68rem', padding: '4px 2px' }}
+                              onClick={() => {
+                                setMaskConfig(prev => {
+                                  const pts = [...prev.customPoints];
+                                  pts[prev.selectedPointIndex] = {
+                                    ...pts[prev.selectedPointIndex],
+                                    handleMode: 'corner'
+                                  };
+                                  return { ...prev, customPoints: pts };
+                                });
+                              }}
+                              title="Kendali kiri & kanan bisa digerakkan bebas untuk sudut tajam/patah"
+                            >
+                              Sudut Bebas
+                            </button>
+                          </div>
+
+                          <button
+                            className="btn btn-secondary"
+                            style={{ fontSize: '0.68rem', padding: '3px 4px', width: '100%' }}
+                            onClick={() => {
+                              setMaskConfig(prev => {
+                                const pts = [...prev.customPoints];
+                                const p = pts[prev.selectedPointIndex];
+                                pts[prev.selectedPointIndex] = {
+                                  ...p,
+                                  cpIn: { x: p.x, y: p.y },
+                                  cpOut: { x: p.x, y: p.y },
+                                  handleMode: 'corner'
+                                };
+                                return { ...prev, customPoints: pts };
+                              });
+                            }}
+                            title="Tarik kedua kendali ke titik untuk sudut lurus/tajam"
+                          >
+                            Jadikan Sudut Tajam (Lurus)
+                          </button>
+                        </div>
+                      )}
+
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
                         <button
                           className="btn btn-secondary"
@@ -509,9 +582,10 @@ export default function SidebarControls({
                               const midX = Math.round((p0.x + p1.x) / 2);
                               const midY = Math.round((p0.y + p1.y) / 2);
                               pts.splice(1, 0, { x: midX, y: midY });
+                              const smoothed = computeSmoothTangents(pts);
                               return {
                                 ...prev,
-                                customPoints: pts,
+                                customPoints: smoothed,
                                 selectedPointIndex: 1
                               };
                             });
@@ -549,33 +623,54 @@ export default function SidebarControls({
                         </button>
                       </div>
 
-                      <button
-                        className="btn btn-secondary"
-                        style={{ fontSize: '0.7rem', padding: '5px 4px', gap: '4px', width: '100%' }}
-                        onClick={() => {
-                          setMaskConfig(prev => ({
-                            ...prev,
-                            customPoints: generatePointsFromShape(prev.shapeType, prev.width, prev.height, prev.cornerRadius),
-                            selectedPointIndex: -1
-                          }));
-                        }}
-                        title="Kembalikan titik simpul ke bentuk preset asli"
-                      >
-                        <RotateCcw size={12} /> Reset ke Bentuk Dasar
-                      </button>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ fontSize: '0.68rem', padding: '5px 4px', gap: '4px' }}
+                          onClick={() => {
+                            setMaskConfig(prev => {
+                              if (!prev.customPoints) return prev;
+                              return {
+                                ...prev,
+                                customPoints: computeSmoothTangents(prev.customPoints)
+                              };
+                            });
+                          }}
+                          title="Lenturkan otomatis semua kendali kurva agar mulus mengalir"
+                        >
+                          <Spline size={12} /> Auto-Smooth Semua
+                        </button>
 
+                        <button
+                          className="btn btn-secondary"
+                          style={{ fontSize: '0.68rem', padding: '5px 4px', gap: '4px' }}
+                          onClick={() => {
+                            setMaskConfig(prev => ({
+                              ...prev,
+                              customPoints: generatePointsFromShape(prev.shapeType, prev.width, prev.height, prev.cornerRadius),
+                              selectedPointIndex: -1
+                            }));
+                          }}
+                          title="Kembalikan titik simpul ke bentuk preset asli"
+                        >
+                          <RotateCcw size={12} /> Reset Bentuk
+                        </button>
+                      </div>
+
+                      {/* Panduan Warna Kendali Bézier */}
                       <div style={{
-                        backgroundColor: 'rgba(0,0,0,0.2)',
+                        backgroundColor: 'rgba(0,0,0,0.25)',
                         padding: '6px 8px',
                         borderRadius: 'var(--radius-sm)',
                         fontSize: '0.68rem',
-                        lineHeight: 1.4,
+                        lineHeight: 1.5,
                         color: 'var(--text-muted)'
                       }}>
-                        💡 <strong>Tips Kanvas:</strong><br />
-                        • <strong>Drag titik</strong> untuk membentuk pola unik.<br />
-                        • Klik ikon <strong>(+)</strong> pada garis untuk menambah titik.<br />
-                        • <strong>Klik ganda / klik kanan</strong> pada titik untuk menghapus.
+                        <strong style={{ color: 'var(--text-main)' }}>🎨 Panduan Titik Kendali:</strong><br />
+                        • <span style={{ color: '#38bdf8' }}>● <strong>Biru Muda:</strong></span> Kendali Masuk (*In-Handle*)<br />
+                        • <span style={{ color: '#f472b6' }}>● <strong>Pink:</strong></span> Kendali Keluar (*Out-Handle*)<br />
+                        • <span style={{ color: '#f1e05a' }}>● <strong>Kuning/Putih:</strong></span> Titik Sudut Utama<br />
+                        • Klik ikon <strong>(+)</strong> pada garis untuk menambah titik baru.
                       </div>
                     </div>
                   ) : (

@@ -19,7 +19,8 @@ import {
 import { 
   drawTextSilhouette, 
   generatePointsFromShape, 
-  getCustomPointsSvgPath 
+  getCustomPointsSvgPath,
+  computeSmoothTangents
 } from '../utils/imageProcessor';
 
 export default function CanvasArea({
@@ -232,6 +233,20 @@ export default function CanvasArea({
     });
   };
 
+  const handleControlDragStart = (e, index, handleType) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (!maskConfig) return;
+
+    setMaskConfig(prev => ({ ...prev, selectedPointIndex: index }));
+    setDragAction(`cp_${handleType}_${index}`);
+    setDragOrigin({
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      initPoints: maskConfig.customPoints ? [...maskConfig.customPoints] : []
+    });
+  };
+
   const handleInsertPoint = (e, index, midX, midY) => {
     e.stopPropagation();
     e.preventDefault();
@@ -243,10 +258,11 @@ export default function CanvasArea({
 
     const nextPts = [...currentPts];
     nextPts.splice(index + 1, 0, { x: Math.round(midX), y: Math.round(midY) });
+    const smoothPts = computeSmoothTangents(nextPts);
 
     setMaskConfig(prev => ({
       ...prev,
-      customPoints: nextPts,
+      customPoints: smoothPts,
       isEditPointsMode: true,
       selectedPointIndex: index + 1
     }));
@@ -291,7 +307,104 @@ export default function CanvasArea({
             ? [...prev.customPoints]
             : generatePointsFromShape(prev.shapeType, prev.width, prev.height, prev.cornerRadius);
           const nextPts = [...currentPts];
-          nextPts[pIndex] = { x: localX, y: localY };
+          const oldP = nextPts[pIndex];
+          const deltaX = localX - oldP.x;
+          const deltaY = localY - oldP.y;
+
+          nextPts[pIndex] = {
+            ...oldP,
+            x: localX,
+            y: localY,
+            cpIn: {
+              x: (oldP.cpIn ? oldP.cpIn.x : oldP.x) + deltaX,
+              y: (oldP.cpIn ? oldP.cpIn.y : oldP.y) + deltaY
+            },
+            cpOut: {
+              x: (oldP.cpOut ? oldP.cpOut.x : oldP.x) + deltaX,
+              y: (oldP.cpOut ? oldP.cpOut.y : oldP.y) + deltaY
+            }
+          };
+
+          return {
+            ...prev,
+            customPoints: nextPts,
+            isEditPointsMode: true
+          };
+        });
+      } else if (dragAction.startsWith('cp_in_')) {
+        const pIndex = parseInt(dragAction.replace('cp_in_', ''), 10);
+        const relX = coords.x - maskConfig.x;
+        const relY = coords.y - maskConfig.y;
+        const rad = -((maskConfig.rotation || 0) * Math.PI) / 180;
+        const localX = Math.round(relX * Math.cos(rad) - relY * Math.sin(rad));
+        const localY = Math.round(relX * Math.sin(rad) + relY * Math.cos(rad));
+
+        setMaskConfig(prev => {
+          const currentPts = prev.customPoints && prev.customPoints.length >= 3
+            ? [...prev.customPoints]
+            : generatePointsFromShape(prev.shapeType, prev.width, prev.height, prev.cornerRadius);
+          const nextPts = [...currentPts];
+          const p = nextPts[pIndex];
+          const isCorner = p.handleMode === 'corner';
+
+          const newCpIn = { x: localX, y: localY };
+          let newCpOut = p.cpOut ? { ...p.cpOut } : { x: p.x, y: p.y };
+
+          if (!isCorner) {
+            const vx = localX - p.x;
+            const vy = localY - p.y;
+            newCpOut = {
+              x: Math.round(p.x - vx),
+              y: Math.round(p.y - vy)
+            };
+          }
+
+          nextPts[pIndex] = {
+            ...p,
+            cpIn: newCpIn,
+            cpOut: newCpOut
+          };
+
+          return {
+            ...prev,
+            customPoints: nextPts,
+            isEditPointsMode: true
+          };
+        });
+      } else if (dragAction.startsWith('cp_out_')) {
+        const pIndex = parseInt(dragAction.replace('cp_out_', ''), 10);
+        const relX = coords.x - maskConfig.x;
+        const relY = coords.y - maskConfig.y;
+        const rad = -((maskConfig.rotation || 0) * Math.PI) / 180;
+        const localX = Math.round(relX * Math.cos(rad) - relY * Math.sin(rad));
+        const localY = Math.round(relX * Math.sin(rad) + relY * Math.cos(rad));
+
+        setMaskConfig(prev => {
+          const currentPts = prev.customPoints && prev.customPoints.length >= 3
+            ? [...prev.customPoints]
+            : generatePointsFromShape(prev.shapeType, prev.width, prev.height, prev.cornerRadius);
+          const nextPts = [...currentPts];
+          const p = nextPts[pIndex];
+          const isCorner = p.handleMode === 'corner';
+
+          const newCpOut = { x: localX, y: localY };
+          let newCpIn = p.cpIn ? { ...p.cpIn } : { x: p.x, y: p.y };
+
+          if (!isCorner) {
+            const vx = localX - p.x;
+            const vy = localY - p.y;
+            newCpIn = {
+              x: Math.round(p.x - vx),
+              y: Math.round(p.y - vy)
+            };
+          }
+
+          nextPts[pIndex] = {
+            ...p,
+            cpIn: newCpIn,
+            cpOut: newCpOut
+          };
+
           return {
             ...prev,
             customPoints: nextPts,
@@ -762,7 +875,70 @@ export default function CanvasArea({
                       );
                     })}
 
-                    {/* Interactive Vertex Nodes (Points) */}
+                    {/* Bézier Tangent Lines and Dual Control Handles (In & Out Handles) */}
+                    {maskConfig.customPoints.map((pt, i) => {
+                      const isSelected = maskConfig.selectedPointIndex === i;
+                      const hasCpIn = pt.cpIn && (pt.cpIn.x !== pt.x || pt.cpIn.y !== pt.y);
+                      const hasCpOut = pt.cpOut && (pt.cpOut.x !== pt.x || pt.cpOut.y !== pt.y);
+
+                      return (
+                        <g key={`tangents_${i}`}>
+                          {/* Tangent Line to In-Handle */}
+                          <line
+                            x1={pt.x}
+                            y1={pt.y}
+                            x2={pt.cpIn ? pt.cpIn.x : pt.x}
+                            y2={pt.cpIn ? pt.cpIn.y : pt.y}
+                            stroke="#38bdf8"
+                            strokeWidth={isSelected ? 1.8 : 1.2}
+                            strokeDasharray="4 2"
+                            opacity={isSelected ? 0.95 : 0.65}
+                          />
+
+                          {/* Tangent Line to Out-Handle */}
+                          <line
+                            x1={pt.x}
+                            y1={pt.y}
+                            x2={pt.cpOut ? pt.cpOut.x : pt.x}
+                            y2={pt.cpOut ? pt.cpOut.y : pt.y}
+                            stroke="#f472b6"
+                            strokeWidth={isSelected ? 1.8 : 1.2}
+                            strokeDasharray="4 2"
+                            opacity={isSelected ? 0.95 : 0.65}
+                          />
+
+                          {/* In-Handle Control Knob (Cyan) */}
+                          <circle
+                            cx={pt.cpIn ? pt.cpIn.x : pt.x}
+                            cy={pt.cpIn ? pt.cpIn.y : pt.y}
+                            r={isSelected ? 6 : 4.5}
+                            fill="#38bdf8"
+                            stroke="#ffffff"
+                            strokeWidth={1.5}
+                            onMouseDown={(e) => handleControlDragStart(e, i, 'in')}
+                            style={{ cursor: 'crosshair' }}
+                          >
+                            <title>{`Kendali Masuk (In-Handle) Titik #${i + 1}`}</title>
+                          </circle>
+
+                          {/* Out-Handle Control Knob (Pink) */}
+                          <circle
+                            cx={pt.cpOut ? pt.cpOut.x : pt.x}
+                            cy={pt.cpOut ? pt.cpOut.y : pt.y}
+                            r={isSelected ? 6 : 4.5}
+                            fill="#f472b6"
+                            stroke="#ffffff"
+                            strokeWidth={1.5}
+                            onMouseDown={(e) => handleControlDragStart(e, i, 'out')}
+                            style={{ cursor: 'crosshair' }}
+                          >
+                            <title>{`Kendali Keluar (Out-Handle) Titik #${i + 1}`}</title>
+                          </circle>
+                        </g>
+                      );
+                    })}
+
+                    {/* Interactive Main Vertex Nodes (Points) */}
                     {maskConfig.customPoints.map((pt, i) => {
                       const isSelected = maskConfig.selectedPointIndex === i;
                       return (
@@ -773,7 +949,7 @@ export default function CanvasArea({
                           onDoubleClick={(e) => handleDeletePoint(e, i)}
                           style={{ cursor: 'grab' }}
                         >
-                          <title>{`Titik #${i + 1} (Drag untuk geser, Klik kanan / Double-click untuk hapus)`}</title>
+                          <title>{`Titik Utama #${i + 1} (Drag untuk geser titik & kendali, Klik kanan / Double-click untuk hapus)`}</title>
                           <circle
                             cx={pt.x}
                             cy={pt.y}

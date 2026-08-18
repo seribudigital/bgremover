@@ -234,31 +234,60 @@ export function applyBrush(targetImageData, originalImageData, centerX, centerY,
 }
 
 /**
- * Menghasilkan titik simpul (points) awal berdasarkan bentuk preset
+ * Menghitung kendali Bézier mulus (cpIn & cpOut) untuk setiap titik
+ */
+export function computeSmoothTangents(points, tension = 0.28) {
+  if (!points || points.length < 3) return points;
+  const n = points.length;
+  return points.map((p, i) => {
+    const prev = points[(i - 1 + n) % n];
+    const next = points[(i + 1) % n];
+
+    const vx = (next.x - prev.x) * tension;
+    const vy = (next.y - prev.y) * tension;
+
+    return {
+      x: p.x,
+      y: p.y,
+      cpIn: {
+        x: Math.round((p.x - vx) * 10) / 10,
+        y: Math.round((p.y - vy) * 10) / 10
+      },
+      cpOut: {
+        x: Math.round((p.x + vx) * 10) / 10,
+        y: Math.round((p.y + vy) * 10) / 10
+      },
+      handleMode: p.handleMode || 'smooth'
+    };
+  });
+}
+
+/**
+ * Menghasilkan titik simpul (points) awal dengan kendali Bézier berdasarkan bentuk preset
  */
 export function generatePointsFromShape(shapeType, width, height, cornerRadius = 20) {
   const w2 = width / 2;
   const h2 = height / 2;
-  const pts = [];
+  const rawPts = [];
 
   switch (shapeType) {
     case 'rect':
-      pts.push({ x: -w2, y: -h2 });
-      pts.push({ x: w2, y: -h2 });
-      pts.push({ x: w2, y: h2 });
-      pts.push({ x: -w2, y: h2 });
+      rawPts.push({ x: -w2, y: -h2 });
+      rawPts.push({ x: w2, y: -h2 });
+      rawPts.push({ x: w2, y: h2 });
+      rawPts.push({ x: -w2, y: h2 });
       break;
 
     case 'rounded_rect': {
       const r = Math.min(cornerRadius || 20, Math.abs(w2), Math.abs(h2));
-      pts.push({ x: -w2 + r, y: -h2 });
-      pts.push({ x: w2 - r, y: -h2 });
-      pts.push({ x: w2, y: -h2 + r });
-      pts.push({ x: w2, y: h2 - r });
-      pts.push({ x: w2 - r, y: h2 });
-      pts.push({ x: -w2 + r, y: h2 });
-      pts.push({ x: -w2, y: h2 - r });
-      pts.push({ x: -w2, y: -h2 + r });
+      rawPts.push({ x: -w2 + r, y: -h2 });
+      rawPts.push({ x: w2 - r, y: -h2 });
+      rawPts.push({ x: w2, y: -h2 + r });
+      rawPts.push({ x: w2, y: h2 - r });
+      rawPts.push({ x: w2 - r, y: h2 });
+      rawPts.push({ x: -w2 + r, y: h2 });
+      rawPts.push({ x: -w2, y: h2 - r });
+      rawPts.push({ x: -w2, y: -h2 + r });
       break;
     }
 
@@ -267,7 +296,7 @@ export function generatePointsFromShape(shapeType, width, height, cornerRadius =
       const numPts = 12;
       for (let i = 0; i < numPts; i++) {
         const a = (i * 2 * Math.PI) / numPts;
-        pts.push({
+        rawPts.push({
           x: Math.round(w2 * Math.cos(a) * 10) / 10,
           y: Math.round(h2 * Math.sin(a) * 10) / 10
         });
@@ -280,12 +309,12 @@ export function generatePointsFromShape(shapeType, width, height, cornerRadius =
       const step = Math.PI / points;
       let rot = (Math.PI / 2) * 3;
       for (let i = 0; i < points; i++) {
-        pts.push({
+        rawPts.push({
           x: Math.round(Math.cos(rot) * w2 * 10) / 10,
           y: Math.round(Math.sin(rot) * h2 * 10) / 10
         });
         rot += step;
-        pts.push({
+        rawPts.push({
           x: Math.round(Math.cos(rot) * (w2 * 0.45) * 10) / 10,
           y: Math.round(Math.sin(rot) * (h2 * 0.45) * 10) / 10
         });
@@ -297,32 +326,32 @@ export function generatePointsFromShape(shapeType, width, height, cornerRadius =
     case 'heart': {
       const sx = w2 / 100;
       const sy = h2 / 100;
-      pts.push({ x: 0, y: -35 * sy });
-      pts.push({ x: 35 * sx, y: -75 * sy });
-      pts.push({ x: 80 * sx, y: -70 * sy });
-      pts.push({ x: 95 * sx, y: -30 * sy });
-      pts.push({ x: 75 * sx, y: 20 * sy });
-      pts.push({ x: 35 * sx, y: 60 * sy });
-      pts.push({ x: 0, y: 95 * sy });
-      pts.push({ x: -35 * sx, y: 60 * sy });
-      pts.push({ x: -75 * sx, y: 20 * sy });
-      pts.push({ x: -95 * sx, y: -30 * sy });
-      pts.push({ x: -80 * sx, y: -70 * sy });
-      pts.push({ x: -35 * sx, y: -75 * sy });
+      rawPts.push({ x: 0, y: -35 * sy });
+      rawPts.push({ x: 35 * sx, y: -75 * sy });
+      rawPts.push({ x: 80 * sx, y: -70 * sy });
+      rawPts.push({ x: 95 * sx, y: -30 * sy });
+      rawPts.push({ x: 75 * sx, y: 20 * sy });
+      rawPts.push({ x: 35 * sx, y: 60 * sy });
+      rawPts.push({ x: 0, y: 95 * sy });
+      rawPts.push({ x: -35 * sx, y: 60 * sy });
+      rawPts.push({ x: -75 * sx, y: 20 * sy });
+      rawPts.push({ x: -95 * sx, y: -30 * sy });
+      rawPts.push({ x: -80 * sx, y: -70 * sy });
+      rawPts.push({ x: -35 * sx, y: -75 * sy });
       break;
     }
 
     case 'triangle':
-      pts.push({ x: 0, y: -h2 });
-      pts.push({ x: w2, y: h2 });
-      pts.push({ x: -w2, y: h2 });
+      rawPts.push({ x: 0, y: -h2 });
+      rawPts.push({ x: w2, y: h2 });
+      rawPts.push({ x: -w2, y: h2 });
       break;
 
     case 'hexagon': {
       const sides = 6;
       for (let i = 0; i < sides; i++) {
         const a = (i * 2 * Math.PI) / sides;
-        pts.push({
+        rawPts.push({
           x: Math.round(w2 * Math.cos(a) * 10) / 10,
           y: Math.round(h2 * Math.sin(a) * 10) / 10
         });
@@ -331,70 +360,65 @@ export function generatePointsFromShape(shapeType, width, height, cornerRadius =
     }
 
     case 'diamond':
-      pts.push({ x: 0, y: -h2 });
-      pts.push({ x: w2, y: 0 });
-      pts.push({ x: 0, y: h2 });
-      pts.push({ x: -w2, y: 0 });
+      rawPts.push({ x: 0, y: -h2 });
+      rawPts.push({ x: w2, y: 0 });
+      rawPts.push({ x: 0, y: h2 });
+      rawPts.push({ x: -w2, y: 0 });
       break;
 
     default:
-      pts.push({ x: -w2, y: -h2 });
-      pts.push({ x: w2, y: -h2 });
-      pts.push({ x: w2, y: h2 });
-      pts.push({ x: -w2, y: h2 });
+      rawPts.push({ x: -w2, y: -h2 });
+      rawPts.push({ x: w2, y: -h2 });
+      rawPts.push({ x: w2, y: h2 });
+      rawPts.push({ x: -w2, y: h2 });
       break;
   }
 
-  return pts;
+  // Hitung kendali Bézier halus awal untuk semua titik
+  return computeSmoothTangents(rawPts);
 }
 
 /**
- * Menggambar Path Poligon atau Kurva Kustom dari Array Titik
+ * Menggambar Path Poligon atau Kurva Bézier Kustom dari Array Titik
  */
 export function drawCustomPointsPath(ctx, points, curveType = 'linear') {
   if (!points || points.length < 3) return;
   const len = points.length;
 
   ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
 
   if (curveType === 'smooth') {
-    const pPrev = points[len - 1];
-    const p0 = points[0];
-    ctx.moveTo((pPrev.x + p0.x) / 2, (pPrev.y + p0.y) / 2);
     for (let i = 0; i < len; i++) {
       const curr = points[i];
       const next = points[(i + 1) % len];
-      const midX = (curr.x + next.x) / 2;
-      const midY = (curr.y + next.y) / 2;
-      ctx.quadraticCurveTo(curr.x, curr.y, midX, midY);
+      const cp1 = curr.cpOut || { x: curr.x, y: curr.y };
+      const cp2 = next.cpIn || { x: next.x, y: next.y };
+      ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, next.x, next.y);
     }
-    ctx.closePath();
   } else {
-    ctx.moveTo(points[0].x, points[0].y);
     for (let i = 1; i < len; i++) {
       ctx.lineTo(points[i].x, points[i].y);
     }
-    ctx.closePath();
   }
+  ctx.closePath();
 }
 
 /**
- * Menghasilkan SVG Path string (d) untuk kurva atau poligon titik kustom
+ * Menghasilkan SVG Path string (d) untuk kurva Bézier atau poligon titik kustom
  */
 export function getCustomPointsSvgPath(points, curveType = 'linear') {
   if (!points || points.length < 3) return '';
   const len = points.length;
 
   if (curveType === 'smooth') {
-    const pPrev = points[len - 1];
-    const p0 = points[0];
-    let d = `M ${(pPrev.x + p0.x) / 2} ${(pPrev.y + p0.y) / 2} `;
+    let d = `M ${points[0].x} ${points[0].y} `;
     for (let i = 0; i < len; i++) {
       const curr = points[i];
       const next = points[(i + 1) % len];
-      const midX = (curr.x + next.x) / 2;
-      const midY = (curr.y + next.y) / 2;
-      d += `Q ${curr.x} ${curr.y}, ${midX} ${midY} `;
+      const cp1 = curr.cpOut || { x: curr.x, y: curr.y };
+      const cp2 = next.cpIn || { x: next.x, y: next.y };
+      d += `C ${cp1.x} ${cp1.y}, ${cp2.x} ${cp2.y}, ${next.x} ${next.y} `;
     }
     d += 'Z';
     return d;
