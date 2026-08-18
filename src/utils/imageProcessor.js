@@ -363,6 +363,12 @@ export function getWrappedTextLines(text, maxWidth, options = {}) {
   const measureTextWidth = (str) => {
     if (!str) return 0;
     if (ctx) {
+      // Jika browser mendukung ctx.letterSpacing (sudah di-set di atas),
+      // measureText().width sudah menghitung letter spacing — jangan hitung ganda
+      if (ctx.letterSpacing !== undefined) {
+        return ctx.measureText(str).width;
+      }
+      // Browser lama tanpa ctx.letterSpacing — tambahkan manual
       return ctx.measureText(str).width + (str.length > 1 ? (str.length - 1) * letterSpacing : 0);
     }
     return str.length * (fontSize * 0.58) + (str.length > 1 ? (str.length - 1) * letterSpacing : 0);
@@ -417,7 +423,8 @@ export function getWrappedTextLines(text, maxWidth, options = {}) {
 }
 
 /**
- * Menggambar Teks Kustom pada Context dengan Word Wrapping, Alignment, Letter Spacing, dan Line Height
+ * Menggambar Teks Kustom pada Context dengan Word Wrapping, Alignment (termasuk Justify),
+ * Letter Spacing, Line Height, dan Clipping Vertikal
  */
 export function drawTextSilhouette(ctx, options = {}) {
   const {
@@ -428,6 +435,7 @@ export function drawTextSilhouette(ctx, options = {}) {
     fontStyle = 'normal',
     letterSpacing = 0,
     width = 300,
+    height = 300,
     wrapText = true,
     textAlign = 'center',
     lineHeight = 1.2
@@ -437,7 +445,6 @@ export function drawTextSilhouette(ctx, options = {}) {
   if (ctx.letterSpacing !== undefined) {
     ctx.letterSpacing = `${letterSpacing}px`;
   }
-  ctx.textAlign = textAlign;
   ctx.textBaseline = 'middle';
 
   const lines = getWrappedTextLines(text, width, {
@@ -453,16 +460,87 @@ export function drawTextSilhouette(ctx, options = {}) {
   const totalTextHeight = lines.length * lineSpacing;
   const startY = -(totalTextHeight / 2) + lineSpacing / 2;
 
-  let xPos = 0;
-  if (textAlign === 'left') {
-    xPos = -width / 2;
-  } else if (textAlign === 'right') {
-    xPos = width / 2;
-  }
+  // Clip ke area kotak agar teks tidak keluar batas vertikal
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(-width / 2, -height / 2, width, height);
+  ctx.clip();
 
   lines.forEach((line, idx) => {
-    ctx.fillText(line, xPos, startY + idx * lineSpacing);
+    const y = startY + idx * lineSpacing;
+
+    // Mode Justify: distribusikan spasi antar kata secara merata
+    // Baris terakhir tetap rata kiri (standar typesetting)
+    if (textAlign === 'justify' && idx < lines.length - 1) {
+      const words = line.split(' ').filter(w => w.length > 0);
+      if (words.length > 1) {
+        ctx.textAlign = 'left';
+        const wordsWidth = words.reduce((sum, w) => sum + ctx.measureText(w).width, 0);
+        const extraSpace = (width - wordsWidth) / (words.length - 1);
+        let xCursor = -width / 2;
+        words.forEach(word => {
+          ctx.fillText(word, xCursor, y);
+          xCursor += ctx.measureText(word).width + extraSpace;
+        });
+        return;
+      }
+    }
+
+    // Alignment normal (left / center / right / justify baris terakhir → left)
+    const effectiveAlign = textAlign === 'justify' ? 'left' : textAlign;
+    ctx.textAlign = effectiveAlign;
+    let xPos = 0;
+    if (effectiveAlign === 'left') xPos = -width / 2;
+    else if (effectiveAlign === 'right') xPos = width / 2;
+
+    ctx.fillText(line, xPos, y);
   });
+
+  ctx.restore();
+}
+
+/**
+ * Menghitung ukuran font optimal agar teks pas di dalam kotak (width × height)
+ * Menggunakan algoritma binary search untuk efisiensi
+ */
+export function calculateAutoFitFontSize(text, maxWidth, maxHeight, options = {}) {
+  const {
+    fontFamily = 'Impact, sans-serif',
+    fontWeight = 'bold',
+    fontStyle = 'normal',
+    letterSpacing = 0,
+    wrapText = true,
+    lineHeight = 1.2
+  } = options;
+
+  if (!text || !text.trim() || maxWidth <= 0 || maxHeight <= 0) return 24;
+
+  let lo = 6;
+  let hi = Math.min(800, Math.round(maxHeight * 1.2));
+  let best = lo;
+
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    const lines = getWrappedTextLines(text, maxWidth, {
+      fontSize: mid,
+      fontFamily,
+      fontWeight,
+      fontStyle,
+      letterSpacing,
+      wrapText
+    });
+
+    const totalHeight = lines.length * mid * (lineHeight || 1.2);
+
+    if (totalHeight <= maxHeight) {
+      best = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  return Math.max(6, best);
 }
 
 /**

@@ -22,8 +22,10 @@ import {
   AlignLeft,
   AlignCenter,
   AlignRight,
+  AlignJustify,
   WrapText
 } from 'lucide-react';
+import { calculateAutoFitFontSize } from '../utils/imageProcessor';
 
 export default function SidebarControls({
   toolMode,
@@ -468,6 +470,14 @@ export default function SidebarControls({
                       >
                         <AlignRight size={14} />
                       </button>
+                      <button
+                        className={`btn-icon ${maskConfig.textAlign === 'justify' ? 'active' : ''}`}
+                        onClick={() => setMaskConfig(prev => ({ ...prev, textAlign: 'justify' }))}
+                        title="Rata Kiri-Kanan (Justify)"
+                        style={{ padding: '6px' }}
+                      >
+                        <AlignJustify size={14} />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -484,6 +494,29 @@ export default function SidebarControls({
                     value={maskConfig.fontSize || 60}
                     onChange={(e) => setMaskConfig(prev => ({ ...prev, fontSize: Number(e.target.value) }))}
                   />
+                  <button
+                    className="btn btn-secondary"
+                    style={{ width: '100%', fontSize: '0.75rem', marginTop: '4px', gap: '6px' }}
+                    onClick={() => {
+                      const autoSize = calculateAutoFitFontSize(
+                        maskConfig.text,
+                        maskConfig.width,
+                        maskConfig.height,
+                        {
+                          fontFamily: maskConfig.fontFamily,
+                          fontWeight: maskConfig.fontWeight,
+                          fontStyle: maskConfig.fontStyle,
+                          letterSpacing: maskConfig.letterSpacing,
+                          wrapText: maskConfig.wrapText !== false,
+                          lineHeight: maskConfig.lineHeight || 1.2
+                        }
+                      );
+                      setMaskConfig(prev => ({ ...prev, fontSize: autoSize }));
+                    }}
+                    title="Otomatis hitung ukuran font agar teks pas memenuhi kotak tanpa keluar"
+                  >
+                    <Maximize size={14} /> Auto Fit — Sesuaikan Otomatis
+                  </button>
                 </div>
 
                 <div className="control-group">

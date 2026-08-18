@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { 
   Split, 
   ZoomIn, 
@@ -11,7 +11,7 @@ import {
   Type,
   Sparkles 
 } from 'lucide-react';
-import { getWrappedTextLines } from '../utils/imageProcessor';
+import { drawTextSilhouette } from '../utils/imageProcessor';
 
 export default function CanvasArea({
   originalImage,
@@ -351,72 +351,41 @@ export default function CanvasArea({
     }
   };
 
-  // Render SVG Text dengan dukungan Text Wrap presisi, Letter Spacing & Line Height
-  const renderSvgText = () => {
-    if (!maskConfig) return null;
-    const {
-      text = 'STUDIO',
-      fontSize = 60,
-      fontFamily = 'Impact, sans-serif',
-      fontWeight = 'bold',
-      fontStyle = 'normal',
-      letterSpacing = 0,
-      width = 300,
-      wrapText = true,
-      textAlign = 'center',
-      lineHeight = 1.2
-    } = maskConfig;
-
-    const lines = getWrappedTextLines(text, width, {
-      fontSize,
-      fontFamily,
-      fontWeight,
-      fontStyle,
-      letterSpacing,
-      wrapText: wrapText !== false
-    });
-
-    const lineSpacing = fontSize * (lineHeight || 1.2);
-    const totalTextHeight = lines.length * lineSpacing;
-    const startY = -(totalTextHeight / 2) + lineSpacing / 2;
-
-    let anchor = 'middle';
-    if (textAlign === 'left') anchor = 'start';
-    if (textAlign === 'right') anchor = 'end';
-
-    return (
-      <text
-        textAnchor={anchor}
-        dominantBaseline="central"
-        fontSize={fontSize}
-        fontFamily={fontFamily}
-        fontWeight={fontWeight}
-        fontStyle={fontStyle}
-        letterSpacing={`${letterSpacing}px`}
-        fill={themeFill}
-        stroke={themeColor}
-        strokeWidth="1.5"
-      >
-        {lines.map((line, idx) => {
-          let xPos = 0;
-          if (textAlign === 'left') xPos = -width / 2;
-          if (textAlign === 'right') xPos = width / 2;
-          return (
-            <tspan key={idx} x={xPos} y={startY + idx * lineSpacing}>
-              {line}
-            </tspan>
-          );
-        })}
-      </text>
-    );
-  };
-
   const isShapeActive = toolMode === 'shape' || (toolMode === 'shape_mask' && maskConfig?.maskType === 'shape');
   const isTextActive = toolMode === 'text' || (toolMode === 'shape_mask' && maskConfig?.maskType === 'text');
   const isMaskMode = isShapeActive || isTextActive;
   const isIntersect = maskConfig?.operation === 'intersect';
   const themeColor = isIntersect ? '#2f81f7' : '#f85149';
   const themeFill = isIntersect ? 'rgba(47, 129, 247, 0.22)' : 'rgba(248, 81, 73, 0.22)';
+
+  // Preview teks berbasis Canvas (WYSIWYG — rendering identik dengan hasil akhir)
+  // Menggunakan drawTextSilhouette() yang sama persis untuk preview dan hasil masking
+  const textPreviewUrl = useMemo(() => {
+    if (!maskConfig || maskConfig.maskType !== 'text') return null;
+    const { width, height, text, fontSize, fontFamily, fontWeight, fontStyle,
+            letterSpacing, wrapText, textAlign, lineHeight, operation } = maskConfig;
+    if (!width || !height || !text) return null;
+
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.ceil(width));
+    c.height = Math.max(1, Math.ceil(height));
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, c.width, c.height);
+    ctx.translate(c.width / 2, c.height / 2);
+
+    // Warna preview semi-transparan sesuai mode operasi
+    ctx.fillStyle = operation === 'intersect'
+      ? 'rgba(47, 129, 247, 0.8)'
+      : 'rgba(248, 81, 73, 0.8)';
+
+    drawTextSilhouette(ctx, {
+      text, fontSize, fontFamily, fontWeight, fontStyle,
+      letterSpacing, width, height, wrapText, textAlign, lineHeight
+    });
+
+    return c.toDataURL();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- semua field maskConfig yang relevan sudah di-destructure di dalam
+  }, [maskConfig]);
 
   return (
     <div className="canvas-viewport">
@@ -613,7 +582,17 @@ export default function CanvasArea({
                   strokeWidth="2.5"
                   strokeDasharray="6 4"
                 >
-                  {maskConfig.maskType === 'shape' ? renderSvgShape() : renderSvgText()}
+                  {maskConfig.maskType === 'shape' ? renderSvgShape() : (
+                    textPreviewUrl && (
+                      <image
+                        href={textPreviewUrl}
+                        x={-maskConfig.width / 2}
+                        y={-maskConfig.height / 2}
+                        width={maskConfig.width}
+                        height={maskConfig.height}
+                      />
+                    )
+                  )}
                 </g>
 
                 {/* Bounding Box Outline */}

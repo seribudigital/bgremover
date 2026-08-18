@@ -135,6 +135,20 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleUndo, handleRedo]);
 
+  // Preload font families agar pengukuran teks untuk wrapping akurat
+  useEffect(() => {
+    if (typeof document !== 'undefined' && document.fonts) {
+      const fontFamilies = [
+        'Impact', 'Georgia', 'Arial Black', 'Courier New', 'Plus Jakarta Sans'
+      ];
+      fontFamilies.forEach(f => {
+        document.fonts.load(`900 48px "${f}"`).catch(() => {});
+        document.fonts.load(`normal 48px "${f}"`).catch(() => {});
+        document.fonts.load(`italic 48px "${f}"`).catch(() => {});
+      });
+    }
+  }, []);
+
   // Inisialisasi Kanvas saat foto baru diunggah
   const handleImageSelected = (src) => {
     setImageSrc(src);
