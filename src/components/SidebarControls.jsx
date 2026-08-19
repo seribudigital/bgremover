@@ -379,13 +379,12 @@ export default function SidebarControls({
                             fontSize: '0.65rem'
                           }}
                           onClick={() => {
-                            setMaskConfig(prev => {
-                              const next = { ...prev, shapeType: shape.id };
-                              if (prev.isEditPointsMode) {
-                                next.customPoints = generatePointsFromShape(shape.id, prev.width, prev.height, prev.cornerRadius);
-                              }
-                              return next;
-                            });
+                            setMaskConfig(prev => ({
+                              ...prev,
+                              shapeType: shape.id,
+                              customPoints: generatePointsFromShape(shape.id, prev.width, prev.height, prev.cornerRadius),
+                              selectedPointIndex: -1
+                            }));
                           }}
                         >
                           <IconComponent size={18} />
@@ -891,11 +890,30 @@ export default function SidebarControls({
                 onChange={(e) => {
                   const val = Number(e.target.value);
                   setMaskConfig(prev => {
-                    const ratio = prev.height / prev.width;
+                    const ratio = prev.height / (prev.width || 1);
+                    const newW = val;
+                    const newH = prev.keepAspect ? Math.max(30, Math.round(val * ratio)) : prev.height;
+                    const scaleX = prev.width > 0 ? newW / prev.width : 1;
+                    const scaleY = prev.height > 0 ? newH / prev.height : 1;
+                    const updatedPoints = prev.customPoints ? prev.customPoints.map(p => ({
+                      ...p,
+                      x: Math.round(p.x * scaleX * 10) / 10,
+                      y: Math.round(p.y * scaleY * 10) / 10,
+                      cpIn: p.cpIn ? {
+                        x: Math.round(p.cpIn.x * scaleX * 10) / 10,
+                        y: Math.round(p.cpIn.y * scaleY * 10) / 10
+                      } : undefined,
+                      cpOut: p.cpOut ? {
+                        x: Math.round(p.cpOut.x * scaleX * 10) / 10,
+                        y: Math.round(p.cpOut.y * scaleY * 10) / 10
+                      } : undefined
+                    })) : null;
+
                     return {
                       ...prev,
-                      width: val,
-                      height: prev.keepAspect ? Math.max(30, Math.round(val * ratio)) : prev.height
+                      width: newW,
+                      height: newH,
+                      ...(updatedPoints ? { customPoints: updatedPoints } : {})
                     };
                   });
                 }}
@@ -915,11 +933,30 @@ export default function SidebarControls({
                 onChange={(e) => {
                   const val = Number(e.target.value);
                   setMaskConfig(prev => {
-                    const ratio = prev.width / prev.height;
+                    const ratio = prev.width / (prev.height || 1);
+                    const newH = val;
+                    const newW = prev.keepAspect ? Math.max(30, Math.round(val * ratio)) : prev.width;
+                    const scaleX = prev.width > 0 ? newW / prev.width : 1;
+                    const scaleY = prev.height > 0 ? newH / prev.height : 1;
+                    const updatedPoints = prev.customPoints ? prev.customPoints.map(p => ({
+                      ...p,
+                      x: Math.round(p.x * scaleX * 10) / 10,
+                      y: Math.round(p.y * scaleY * 10) / 10,
+                      cpIn: p.cpIn ? {
+                        x: Math.round(p.cpIn.x * scaleX * 10) / 10,
+                        y: Math.round(p.cpIn.y * scaleY * 10) / 10
+                      } : undefined,
+                      cpOut: p.cpOut ? {
+                        x: Math.round(p.cpOut.x * scaleX * 10) / 10,
+                        y: Math.round(p.cpOut.y * scaleY * 10) / 10
+                      } : undefined
+                    })) : null;
+
                     return {
                       ...prev,
-                      height: val,
-                      width: prev.keepAspect ? Math.max(30, Math.round(val * ratio)) : prev.width
+                      height: newH,
+                      width: newW,
+                      ...(updatedPoints ? { customPoints: updatedPoints } : {})
                     };
                   });
                 }}

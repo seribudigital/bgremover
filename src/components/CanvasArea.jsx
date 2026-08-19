@@ -215,7 +215,12 @@ export default function CanvasArea({
       initW: maskConfig.width,
       initH: maskConfig.height,
       initRot: maskConfig.rotation || 0,
-      initFontSize: maskConfig.fontSize || 120
+      initFontSize: maskConfig.fontSize || 120,
+      initPoints: maskConfig.customPoints ? maskConfig.customPoints.map(p => ({
+        ...p,
+        cpIn: p.cpIn ? { ...p.cpIn } : undefined,
+        cpOut: p.cpOut ? { ...p.cpOut } : undefined
+      })) : null
     });
   };
 
@@ -444,15 +449,36 @@ export default function CanvasArea({
         if (dragAction.includes('n')) newH = Math.max(20, Math.round(dragOrigin.initH - localDy * 2));
 
         if (maskConfig.keepAspect) {
-          const maxDelta = Math.max(newW / dragOrigin.initW, newH / dragOrigin.initH);
-          newW = Math.round(dragOrigin.initW * maxDelta);
-          newH = Math.round(dragOrigin.initH * maxDelta);
+          const maxDelta = Math.max(newW / (dragOrigin.initW || 1), newH / (dragOrigin.initH || 1));
+          newW = Math.max(20, Math.round(dragOrigin.initW * maxDelta));
+          newH = Math.max(20, Math.round(dragOrigin.initH * maxDelta));
+        }
+
+        const scaleX = dragOrigin.initW > 0 ? newW / dragOrigin.initW : 1;
+        const scaleY = dragOrigin.initH > 0 ? newH / dragOrigin.initH : 1;
+
+        let updatedPoints = undefined;
+        if (dragOrigin.initPoints && dragOrigin.initPoints.length >= 3) {
+          updatedPoints = dragOrigin.initPoints.map(p => ({
+            ...p,
+            x: Math.round(p.x * scaleX * 10) / 10,
+            y: Math.round(p.y * scaleY * 10) / 10,
+            cpIn: p.cpIn ? {
+              x: Math.round(p.cpIn.x * scaleX * 10) / 10,
+              y: Math.round(p.cpIn.y * scaleY * 10) / 10
+            } : undefined,
+            cpOut: p.cpOut ? {
+              x: Math.round(p.cpOut.x * scaleX * 10) / 10,
+              y: Math.round(p.cpOut.y * scaleY * 10) / 10
+            } : undefined
+          }));
         }
 
         setMaskConfig(prev => ({
           ...prev,
           width: newW,
-          height: newH
+          height: newH,
+          ...(updatedPoints ? { customPoints: updatedPoints } : {})
         }));
       }
     };
@@ -492,7 +518,7 @@ export default function CanvasArea({
     if (!maskConfig) return null;
     const { shapeType, width, height, cornerRadius = 20, isEditPointsMode, customPoints, curveType } = maskConfig;
 
-    if ((isEditPointsMode || shapeType === 'custom') && customPoints && customPoints.length >= 3) {
+    if (customPoints && customPoints.length >= 3) {
       const d = getCustomPointsSvgPath(customPoints, curveType || 'linear');
       return <path d={d} />;
     }
@@ -846,8 +872,130 @@ export default function CanvasArea({
                   )}
                 </g>
 
+                {/* Bounding Box Outline & 8 Resize Handles (Always Available to Scale / Resize) */}
+                <rect
+                  x={-maskConfig.width / 2}
+                  y={-maskConfig.height / 2}
+                  width={maskConfig.width}
+                  height={maskConfig.height}
+                  fill="none"
+                  stroke={themeColor}
+                  strokeWidth="1.5"
+                  strokeDasharray="3 3"
+                  opacity={maskConfig.isEditPointsMode ? '0.55' : '0.8'}
+                  style={{ pointerEvents: 'none' }}
+                />
+
+                {/* 4 Corner Resize Handles */}
+                <rect
+                  x={-maskConfig.width / 2 - 5}
+                  y={-maskConfig.height / 2 - 5}
+                  width="10"
+                  height="10"
+                  fill="#ffffff"
+                  stroke={themeColor}
+                  strokeWidth="2"
+                  onMouseDown={(e) => handleTransformStart(e, 'nw')}
+                  style={{ cursor: 'nwse-resize' }}
+                >
+                  <title>Ubah Ukuran (Pojok Kiri-Atas)</title>
+                </rect>
+                <rect
+                  x={maskConfig.width / 2 - 5}
+                  y={-maskConfig.height / 2 - 5}
+                  width="10"
+                  height="10"
+                  fill="#ffffff"
+                  stroke={themeColor}
+                  strokeWidth="2"
+                  onMouseDown={(e) => handleTransformStart(e, 'ne')}
+                  style={{ cursor: 'nesw-resize' }}
+                >
+                  <title>Ubah Ukuran (Pojok Kanan-Atas)</title>
+                </rect>
+                <rect
+                  x={maskConfig.width / 2 - 5}
+                  y={maskConfig.height / 2 - 5}
+                  width="10"
+                  height="10"
+                  fill="#ffffff"
+                  stroke={themeColor}
+                  strokeWidth="2"
+                  onMouseDown={(e) => handleTransformStart(e, 'se')}
+                  style={{ cursor: 'nwse-resize' }}
+                >
+                  <title>Ubah Ukuran (Pojok Kanan-Bawah)</title>
+                </rect>
+                <rect
+                  x={-maskConfig.width / 2 - 5}
+                  y={maskConfig.height / 2 - 5}
+                  width="10"
+                  height="10"
+                  fill="#ffffff"
+                  stroke={themeColor}
+                  strokeWidth="2"
+                  onMouseDown={(e) => handleTransformStart(e, 'sw')}
+                  style={{ cursor: 'nesw-resize' }}
+                >
+                  <title>Ubah Ukuran (Pojok Kiri-Bawah)</title>
+                </rect>
+
+                {/* 4 Edge Resize Handles */}
+                <rect
+                  x={-5}
+                  y={-maskConfig.height / 2 - 4}
+                  width="10"
+                  height="8"
+                  fill="#ffffff"
+                  stroke={themeColor}
+                  strokeWidth="1.5"
+                  onMouseDown={(e) => handleTransformStart(e, 'n')}
+                  style={{ cursor: 'ns-resize' }}
+                >
+                  <title>Ubah Tinggi (Atas)</title>
+                </rect>
+                <rect
+                  x={-5}
+                  y={maskConfig.height / 2 - 4}
+                  width="10"
+                  height="8"
+                  fill="#ffffff"
+                  stroke={themeColor}
+                  strokeWidth="1.5"
+                  onMouseDown={(e) => handleTransformStart(e, 's')}
+                  style={{ cursor: 'ns-resize' }}
+                >
+                  <title>Ubah Tinggi (Bawah)</title>
+                </rect>
+                <rect
+                  x={maskConfig.width / 2 - 4}
+                  y={-4}
+                  width="8"
+                  height="10"
+                  fill="#ffffff"
+                  stroke={themeColor}
+                  strokeWidth="1.5"
+                  onMouseDown={(e) => handleTransformStart(e, 'e')}
+                  style={{ cursor: 'ew-resize' }}
+                >
+                  <title>Ubah Lebar (Kanan)</title>
+                </rect>
+                <rect
+                  x={-maskConfig.width / 2 - 4}
+                  y={-4}
+                  width="8"
+                  height="10"
+                  fill="#ffffff"
+                  stroke={themeColor}
+                  strokeWidth="1.5"
+                  onMouseDown={(e) => handleTransformStart(e, 'w')}
+                  style={{ cursor: 'ew-resize' }}
+                >
+                  <title>Ubah Lebar (Kiri)</title>
+                </rect>
+
                 {/* Mode Edit Titik (Vector Vertex Handles & Midpoint Add Buttons) */}
-                {maskConfig.maskType === 'shape' && maskConfig.isEditPointsMode && maskConfig.customPoints && maskConfig.customPoints.length >= 3 ? (
+                {maskConfig.maskType === 'shape' && maskConfig.isEditPointsMode && maskConfig.customPoints && maskConfig.customPoints.length >= 3 && (
                   <>
                     {/* Midpoint '+' Handles to Add New Points */}
                     {maskConfig.customPoints.map((pt, i) => {
@@ -878,8 +1026,6 @@ export default function CanvasArea({
                     {/* Bézier Tangent Lines and Dual Control Handles (In & Out Handles) */}
                     {maskConfig.customPoints.map((pt, i) => {
                       const isSelected = maskConfig.selectedPointIndex === i;
-                      const hasCpIn = pt.cpIn && (pt.cpIn.x !== pt.x || pt.cpIn.y !== pt.y);
-                      const hasCpOut = pt.cpOut && (pt.cpOut.x !== pt.x || pt.cpOut.y !== pt.y);
 
                       return (
                         <g key={`tangents_${i}`}>
@@ -967,114 +1113,6 @@ export default function CanvasArea({
                         </g>
                       );
                     })}
-                  </>
-                ) : (
-                  <>
-                    {/* Bounding Box Outline */}
-                    <rect
-                      x={-maskConfig.width / 2}
-                      y={-maskConfig.height / 2}
-                      width={maskConfig.width}
-                      height={maskConfig.height}
-                      fill="none"
-                      stroke={themeColor}
-                      strokeWidth="1.5"
-                      strokeDasharray="3 3"
-                      opacity="0.8"
-                      style={{ pointerEvents: 'none' }}
-                    />
-
-                    {/* 4 Corner Resize Handles */}
-                    <rect
-                      x={-maskConfig.width / 2 - 5}
-                      y={-maskConfig.height / 2 - 5}
-                      width="10"
-                      height="10"
-                      fill="#ffffff"
-                      stroke={themeColor}
-                      strokeWidth="2"
-                      onMouseDown={(e) => handleTransformStart(e, 'nw')}
-                      style={{ cursor: 'nwse-resize' }}
-                    />
-                    <rect
-                      x={maskConfig.width / 2 - 5}
-                      y={-maskConfig.height / 2 - 5}
-                      width="10"
-                      height="10"
-                      fill="#ffffff"
-                      stroke={themeColor}
-                      strokeWidth="2"
-                      onMouseDown={(e) => handleTransformStart(e, 'ne')}
-                      style={{ cursor: 'nesw-resize' }}
-                    />
-                    <rect
-                      x={maskConfig.width / 2 - 5}
-                      y={maskConfig.height / 2 - 5}
-                      width="10"
-                      height="10"
-                      fill="#ffffff"
-                      stroke={themeColor}
-                      strokeWidth="2"
-                      onMouseDown={(e) => handleTransformStart(e, 'se')}
-                      style={{ cursor: 'nwse-resize' }}
-                    />
-                    <rect
-                      x={-maskConfig.width / 2 - 5}
-                      y={maskConfig.height / 2 - 5}
-                      width="10"
-                      height="10"
-                      fill="#ffffff"
-                      stroke={themeColor}
-                      strokeWidth="2"
-                      onMouseDown={(e) => handleTransformStart(e, 'sw')}
-                      style={{ cursor: 'nesw-resize' }}
-                    />
-
-                    {/* 4 Edge Resize Handles */}
-                    <rect
-                      x={-5}
-                      y={-maskConfig.height / 2 - 4}
-                      width="10"
-                      height="8"
-                      fill="#ffffff"
-                      stroke={themeColor}
-                      strokeWidth="1.5"
-                      onMouseDown={(e) => handleTransformStart(e, 'n')}
-                      style={{ cursor: 'ns-resize' }}
-                    />
-                    <rect
-                      x={-5}
-                      y={maskConfig.height / 2 - 4}
-                      width="10"
-                      height="8"
-                      fill="#ffffff"
-                      stroke={themeColor}
-                      strokeWidth="1.5"
-                      onMouseDown={(e) => handleTransformStart(e, 's')}
-                      style={{ cursor: 'ns-resize' }}
-                    />
-                    <rect
-                      x={maskConfig.width / 2 - 4}
-                      y={-4}
-                      width="8"
-                      height="10"
-                      fill="#ffffff"
-                      stroke={themeColor}
-                      strokeWidth="1.5"
-                      onMouseDown={(e) => handleTransformStart(e, 'e')}
-                      style={{ cursor: 'ew-resize' }}
-                    />
-                    <rect
-                      x={-maskConfig.width / 2 - 4}
-                      y={-4}
-                      width="8"
-                      height="10"
-                      fill="#ffffff"
-                      stroke={themeColor}
-                      strokeWidth="1.5"
-                      onMouseDown={(e) => handleTransformStart(e, 'w')}
-                      style={{ cursor: 'ew-resize' }}
-                    />
                   </>
                 )}
 

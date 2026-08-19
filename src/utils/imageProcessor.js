@@ -436,7 +436,7 @@ export function getCustomPointsSvgPath(points, curveType = 'linear') {
  * Menggambar Path Geometris (Bentuk) dengan skala independen Width & Height
  */
 export function drawShapePath(ctx, shapeType, width, height, cornerRadius = 0, customPoints = null, curveType = 'linear', isEditPointsMode = false) {
-  if ((isEditPointsMode || shapeType === 'custom') && customPoints && customPoints.length >= 3) {
+  if (customPoints && customPoints.length >= 3) {
     drawCustomPointsPath(ctx, customPoints, curveType);
     return;
   }
