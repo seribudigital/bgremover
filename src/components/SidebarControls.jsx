@@ -509,24 +509,45 @@ export default function SidebarControls({
                           </div>
                           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px' }}>
                             <button
-                              className={`btn btn-secondary ${maskConfig.customPoints[maskConfig.selectedPointIndex].handleMode !== 'corner' ? 'active' : ''}`}
+                              className={`btn btn-secondary ${maskConfig.customPoints[maskConfig.selectedPointIndex].handleMode === 'smooth' ? 'active' : ''}`}
                               style={{ fontSize: '0.68rem', padding: '4px 2px' }}
                               onClick={() => {
                                 setMaskConfig(prev => {
                                   const pts = [...prev.customPoints];
-                                  pts[prev.selectedPointIndex] = {
-                                    ...pts[prev.selectedPointIndex],
+                                  const idx = prev.selectedPointIndex;
+                                  const p = pts[idx];
+                                  const n = pts.length;
+                                  const prevPt = pts[(idx - 1 + n) % n];
+                                  const nextPt = pts[(idx + 1) % n];
+
+                                  let cpIn = p.cpIn ? { ...p.cpIn } : { x: p.x, y: p.y };
+                                  let cpOut = p.cpOut ? { ...p.cpOut } : { x: p.x, y: p.y };
+                                  if (cpIn.x === p.x && cpIn.y === p.y && cpOut.x === p.x && cpOut.y === p.y) {
+                                    const vx = (nextPt.x - prevPt.x) * 0.28;
+                                    const vy = (nextPt.y - prevPt.y) * 0.28;
+                                    cpIn = { x: Math.round((p.x - vx) * 10) / 10, y: Math.round((p.y - vy) * 10) / 10 };
+                                    cpOut = { x: Math.round((p.x + vx) * 10) / 10, y: Math.round((p.y + vy) * 10) / 10 };
+                                  } else {
+                                    const vx = p.x - cpIn.x;
+                                    const vy = p.y - cpIn.y;
+                                    cpOut = { x: Math.round((p.x + vx) * 10) / 10, y: Math.round((p.y + vy) * 10) / 10 };
+                                  }
+
+                                  pts[idx] = {
+                                    ...p,
+                                    cpIn,
+                                    cpOut,
                                     handleMode: 'smooth'
                                   };
                                   return { ...prev, customPoints: pts };
                                 });
                               }}
-                              title="Kedua kendali sejajar membentuk kelengkungan mulus"
+                              title="Kedua kendali sejajar membentuk kelengkungan mulus (Smooth)"
                             >
                               Lentur (Mulus)
                             </button>
                             <button
-                              className={`btn btn-secondary ${maskConfig.customPoints[maskConfig.selectedPointIndex].handleMode === 'corner' ? 'active' : ''}`}
+                              className={`btn btn-secondary ${maskConfig.customPoints[maskConfig.selectedPointIndex].handleMode !== 'smooth' ? 'active' : ''}`}
                               style={{ fontSize: '0.68rem', padding: '4px 2px' }}
                               onClick={() => {
                                 setMaskConfig(prev => {
@@ -538,9 +559,9 @@ export default function SidebarControls({
                                   return { ...prev, customPoints: pts };
                                 });
                               }}
-                              title="Kendali kiri & kanan bisa digerakkan bebas untuk sudut tajam/patah"
+                              title="Kendali kiri & kanan bisa digerakkan bebas untuk sudut tajam atau lengkungan kustom (Sudut Bebas)"
                             >
-                              Sudut Bebas
+                              Sudut Bebas (Default)
                             </button>
                           </div>
 
@@ -576,16 +597,31 @@ export default function SidebarControls({
                               const pts = prev.customPoints && prev.customPoints.length >= 3
                                 ? [...prev.customPoints]
                                 : generatePointsFromShape(prev.shapeType, prev.width, prev.height, prev.cornerRadius);
-                              const p0 = pts[0];
-                              const p1 = pts[1];
-                              const midX = Math.round((p0.x + p1.x) / 2);
-                              const midY = Math.round((p0.y + p1.y) / 2);
-                              pts.splice(1, 0, { x: midX, y: midY });
-                              const smoothed = computeSmoothTangents(pts);
+                              const idx = prev.selectedPointIndex >= 0 ? prev.selectedPointIndex : 0;
+                              const p0 = pts[idx];
+                              const p1 = pts[(idx + 1) % pts.length];
+                              const midX = Math.round(((p0.x + p1.x) / 2) * 10) / 10;
+                              const midY = Math.round(((p0.y + p1.y) / 2) * 10) / 10;
+                              const cpIn = {
+                                x: Math.round((midX + (p0.x - midX) / 3) * 10) / 10,
+                                y: Math.round((midY + (p0.y - midY) / 3) * 10) / 10
+                              };
+                              const cpOut = {
+                                x: Math.round((midX + (p1.x - midX) / 3) * 10) / 10,
+                                y: Math.round((midY + (p1.y - midY) / 3) * 10) / 10
+                              };
+                              const newPt = {
+                                x: midX,
+                                y: midY,
+                                cpIn,
+                                cpOut,
+                                handleMode: 'corner'
+                              };
+                              pts.splice(idx + 1, 0, newPt);
                               return {
                                 ...prev,
-                                customPoints: smoothed,
-                                selectedPointIndex: 1
+                                customPoints: pts,
+                                selectedPointIndex: idx + 1
                               };
                             });
                           }}

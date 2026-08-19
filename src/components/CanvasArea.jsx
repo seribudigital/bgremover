@@ -262,12 +262,34 @@ export default function CanvasArea({
       : generatePointsFromShape(maskConfig.shapeType, maskConfig.width, maskConfig.height, maskConfig.cornerRadius);
 
     const nextPts = [...currentPts];
-    nextPts.splice(index + 1, 0, { x: Math.round(midX), y: Math.round(midY) });
-    const smoothPts = computeSmoothTangents(nextPts);
+    const prevPt = currentPts[index];
+    const nextPt = currentPts[(index + 1) % currentPts.length];
+
+    const roundMidX = Math.round(midX * 10) / 10;
+    const roundMidY = Math.round(midY * 10) / 10;
+
+    const cpIn = {
+      x: Math.round((roundMidX + (prevPt.x - roundMidX) / 3) * 10) / 10,
+      y: Math.round((roundMidY + (prevPt.y - roundMidY) / 3) * 10) / 10
+    };
+    const cpOut = {
+      x: Math.round((roundMidX + (nextPt.x - roundMidX) / 3) * 10) / 10,
+      y: Math.round((roundMidY + (nextPt.y - roundMidY) / 3) * 10) / 10
+    };
+
+    const newPt = {
+      x: roundMidX,
+      y: roundMidY,
+      cpIn,
+      cpOut,
+      handleMode: 'corner'
+    };
+
+    nextPts.splice(index + 1, 0, newPt);
 
     setMaskConfig(prev => ({
       ...prev,
-      customPoints: smoothPts,
+      customPoints: nextPts,
       isEditPointsMode: true,
       selectedPointIndex: index + 1
     }));
@@ -519,7 +541,7 @@ export default function CanvasArea({
     const { shapeType, width, height, cornerRadius = 20, isEditPointsMode, customPoints, curveType } = maskConfig;
 
     if (customPoints && customPoints.length >= 3) {
-      const d = getCustomPointsSvgPath(customPoints, curveType || 'linear');
+      const d = getCustomPointsSvgPath(customPoints, curveType || 'smooth');
       return <path d={d} />;
     }
 

@@ -59,7 +59,7 @@ export default function App() {
     keepAspect: false,
     isEditPointsMode: false,
     customPoints: null,
-    curveType: 'linear',
+    curveType: 'smooth',
     selectedPointIndex: -1
   });
 

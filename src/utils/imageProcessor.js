@@ -262,143 +262,276 @@ export function computeSmoothTangents(points, tension = 0.28) {
   });
 }
 
+function generateLinearCollinearPoints(polygonPoints) {
+  if (!polygonPoints || polygonPoints.length < 3) return polygonPoints;
+  const n = polygonPoints.length;
+  return polygonPoints.map((p, i) => {
+    const prev = polygonPoints[(i - 1 + n) % n];
+    const next = polygonPoints[(i + 1) % n];
+
+    return {
+      x: p.x,
+      y: p.y,
+      cpIn: {
+        x: Math.round((p.x + (prev.x - p.x) / 3) * 10) / 10,
+        y: Math.round((p.y + (prev.y - p.y) / 3) * 10) / 10
+      },
+      cpOut: {
+        x: Math.round((p.x + (next.x - p.x) / 3) * 10) / 10,
+        y: Math.round((p.y + (next.y - p.y) / 3) * 10) / 10
+      },
+      handleMode: 'corner'
+    };
+  });
+}
+
 /**
- * Menghasilkan titik simpul (points) awal dengan kendali Bézier berdasarkan bentuk preset
+ * Menghasilkan titik simpul (points) awal dengan kendali Bézier berdasarkan bentuk preset.
+ * Bentuk melengkung (lingkaran) menghasilkan titik lengkung mulus (Bézier arc),
+ * sedangkan bentuk sudut (persegi, segitiga, bintang, dll) menghasilkan titik sudut (corner)
+ * yang dapat diedit secara bebas (Sudut Bebas).
  */
 export function generatePointsFromShape(shapeType, width, height, cornerRadius = 20) {
   const w2 = width / 2;
   const h2 = height / 2;
-  const rawPts = [];
 
   switch (shapeType) {
-    case 'rect':
-      rawPts.push({ x: -w2, y: -h2 });
-      rawPts.push({ x: w2, y: -h2 });
-      rawPts.push({ x: w2, y: h2 });
-      rawPts.push({ x: -w2, y: h2 });
-      break;
+    case 'rect': {
+      const raw = [
+        { x: -w2, y: -h2 },
+        { x: w2, y: -h2 },
+        { x: w2, y: h2 },
+        { x: -w2, y: h2 }
+      ];
+      return generateLinearCollinearPoints(raw);
+    }
 
     case 'rounded_rect': {
       const r = Math.min(cornerRadius || 20, Math.abs(w2), Math.abs(h2));
-      rawPts.push({ x: -w2 + r, y: -h2 });
-      rawPts.push({ x: w2 - r, y: -h2 });
-      rawPts.push({ x: w2, y: -h2 + r });
-      rawPts.push({ x: w2, y: h2 - r });
-      rawPts.push({ x: w2 - r, y: h2 });
-      rawPts.push({ x: -w2 + r, y: h2 });
-      rawPts.push({ x: -w2, y: h2 - r });
-      rawPts.push({ x: -w2, y: -h2 + r });
-      break;
+      const kappa = 0.5522847498307935;
+      const kr = r * kappa;
+      const wSpan = Math.max(0, w2 - r);
+      const hSpan = Math.max(0, h2 - r);
+
+      return [
+        {
+          x: -wSpan,
+          y: -h2,
+          cpIn: { x: Math.round((-wSpan - kr) * 10) / 10, y: -h2 },
+          cpOut: { x: Math.round((-wSpan + (wSpan * 2) / 3) * 10) / 10, y: -h2 },
+          handleMode: 'corner'
+        },
+        {
+          x: wSpan,
+          y: -h2,
+          cpIn: { x: Math.round((wSpan - (wSpan * 2) / 3) * 10) / 10, y: -h2 },
+          cpOut: { x: Math.round((wSpan + kr) * 10) / 10, y: -h2 },
+          handleMode: 'corner'
+        },
+        {
+          x: w2,
+          y: -hSpan,
+          cpIn: { x: w2, y: Math.round((-hSpan - kr) * 10) / 10 },
+          cpOut: { x: w2, y: Math.round((-hSpan + (hSpan * 2) / 3) * 10) / 10 },
+          handleMode: 'corner'
+        },
+        {
+          x: w2,
+          y: hSpan,
+          cpIn: { x: w2, y: Math.round((hSpan - (hSpan * 2) / 3) * 10) / 10 },
+          cpOut: { x: w2, y: Math.round((hSpan + kr) * 10) / 10 },
+          handleMode: 'corner'
+        },
+        {
+          x: wSpan,
+          y: h2,
+          cpIn: { x: Math.round((wSpan + kr) * 10) / 10, y: h2 },
+          cpOut: { x: Math.round((wSpan - (wSpan * 2) / 3) * 10) / 10, y: h2 },
+          handleMode: 'corner'
+        },
+        {
+          x: -wSpan,
+          y: h2,
+          cpIn: { x: Math.round((-wSpan + (wSpan * 2) / 3) * 10) / 10, y: h2 },
+          cpOut: { x: Math.round((-wSpan - kr) * 10) / 10, y: h2 },
+          handleMode: 'corner'
+        },
+        {
+          x: -w2,
+          y: hSpan,
+          cpIn: { x: -w2, y: Math.round((hSpan + kr) * 10) / 10 },
+          cpOut: { x: -w2, y: Math.round((hSpan - (hSpan * 2) / 3) * 10) / 10 },
+          handleMode: 'corner'
+        },
+        {
+          x: -w2,
+          y: -hSpan,
+          cpIn: { x: -w2, y: Math.round((-hSpan + (hSpan * 2) / 3) * 10) / 10 },
+          cpOut: { x: -w2, y: Math.round((-hSpan - kr) * 10) / 10 },
+          handleMode: 'corner'
+        }
+      ];
     }
 
     case 'circle':
     case 'ellipse': {
-      const numPts = 12;
-      for (let i = 0; i < numPts; i++) {
-        const a = (i * 2 * Math.PI) / numPts;
-        rawPts.push({
-          x: Math.round(w2 * Math.cos(a) * 10) / 10,
-          y: Math.round(h2 * Math.sin(a) * 10) / 10
-        });
-      }
-      break;
+      // 4 cardinal Bézier control points untuk lingkaran/elips mulus sempurna
+      const kappa = 0.5522847498307935;
+      const kx = Math.round(w2 * kappa * 10) / 10;
+      const ky = Math.round(h2 * kappa * 10) / 10;
+
+      return [
+        {
+          x: 0,
+          y: -h2,
+          cpIn: { x: -kx, y: -h2 },
+          cpOut: { x: kx, y: -h2 },
+          handleMode: 'corner'
+        },
+        {
+          x: w2,
+          y: 0,
+          cpIn: { x: w2, y: -ky },
+          cpOut: { x: w2, y: ky },
+          handleMode: 'corner'
+        },
+        {
+          x: 0,
+          y: h2,
+          cpIn: { x: kx, y: h2 },
+          cpOut: { x: -kx, y: h2 },
+          handleMode: 'corner'
+        },
+        {
+          x: -w2,
+          y: 0,
+          cpIn: { x: -w2, y: ky },
+          cpOut: { x: -w2, y: -ky },
+          handleMode: 'corner'
+        }
+      ];
     }
 
     case 'star': {
       const points = 5;
       const step = Math.PI / points;
       let rot = (Math.PI / 2) * 3;
+      const raw = [];
       for (let i = 0; i < points; i++) {
-        rawPts.push({
+        raw.push({
           x: Math.round(Math.cos(rot) * w2 * 10) / 10,
           y: Math.round(Math.sin(rot) * h2 * 10) / 10
         });
         rot += step;
-        rawPts.push({
+        raw.push({
           x: Math.round(Math.cos(rot) * (w2 * 0.45) * 10) / 10,
           y: Math.round(Math.sin(rot) * (h2 * 0.45) * 10) / 10
         });
         rot += step;
       }
-      break;
+      return generateLinearCollinearPoints(raw);
     }
 
     case 'heart': {
       const sx = w2 / 100;
       const sy = h2 / 100;
-      rawPts.push({ x: 0, y: -35 * sy });
-      rawPts.push({ x: 35 * sx, y: -75 * sy });
-      rawPts.push({ x: 80 * sx, y: -70 * sy });
-      rawPts.push({ x: 95 * sx, y: -30 * sy });
-      rawPts.push({ x: 75 * sx, y: 20 * sy });
-      rawPts.push({ x: 35 * sx, y: 60 * sy });
-      rawPts.push({ x: 0, y: 95 * sy });
-      rawPts.push({ x: -35 * sx, y: 60 * sy });
-      rawPts.push({ x: -75 * sx, y: 20 * sy });
-      rawPts.push({ x: -95 * sx, y: -30 * sy });
-      rawPts.push({ x: -80 * sx, y: -70 * sy });
-      rawPts.push({ x: -35 * sx, y: -75 * sy });
-      break;
+      return [
+        {
+          x: 0,
+          y: Math.round(35 * sy * 10) / 10,
+          cpIn: { x: Math.round(75 * sx * 10) / 10, y: Math.round(-40 * sy * 10) / 10 },
+          cpOut: { x: Math.round(-75 * sx * 10) / 10, y: Math.round(-40 * sy * 10) / 10 },
+          handleMode: 'corner'
+        },
+        {
+          x: Math.round(-45 * sx * 10) / 10,
+          y: Math.round(-95 * sy * 10) / 10,
+          cpIn: { x: Math.round(-100 * sx * 10) / 10, y: Math.round(-90 * sy * 10) / 10 },
+          cpOut: { x: 0, y: Math.round(-95 * sy * 10) / 10 },
+          handleMode: 'corner'
+        },
+        {
+          x: 0,
+          y: Math.round(-45 * sy * 10) / 10,
+          cpIn: { x: 0, y: Math.round(-60 * sy * 10) / 10 },
+          cpOut: { x: 0, y: Math.round(-60 * sy * 10) / 10 },
+          handleMode: 'corner'
+        },
+        {
+          x: Math.round(45 * sx * 10) / 10,
+          y: Math.round(-95 * sy * 10) / 10,
+          cpIn: { x: 0, y: Math.round(-95 * sy * 10) / 10 },
+          cpOut: { x: Math.round(100 * sx * 10) / 10, y: Math.round(-90 * sy * 10) / 10 },
+          handleMode: 'corner'
+        }
+      ];
     }
 
-    case 'triangle':
-      rawPts.push({ x: 0, y: -h2 });
-      rawPts.push({ x: w2, y: h2 });
-      rawPts.push({ x: -w2, y: h2 });
-      break;
+    case 'triangle': {
+      const raw = [
+        { x: 0, y: -h2 },
+        { x: w2, y: h2 },
+        { x: -w2, y: h2 }
+      ];
+      return generateLinearCollinearPoints(raw);
+    }
 
     case 'hexagon': {
       const sides = 6;
+      const raw = [];
       for (let i = 0; i < sides; i++) {
         const a = (i * 2 * Math.PI) / sides;
-        rawPts.push({
+        raw.push({
           x: Math.round(w2 * Math.cos(a) * 10) / 10,
           y: Math.round(h2 * Math.sin(a) * 10) / 10
         });
       }
-      break;
+      return generateLinearCollinearPoints(raw);
     }
 
-    case 'diamond':
-      rawPts.push({ x: 0, y: -h2 });
-      rawPts.push({ x: w2, y: 0 });
-      rawPts.push({ x: 0, y: h2 });
-      rawPts.push({ x: -w2, y: 0 });
-      break;
+    case 'diamond': {
+      const raw = [
+        { x: 0, y: -h2 },
+        { x: w2, y: 0 },
+        { x: 0, y: h2 },
+        { x: -w2, y: 0 }
+      ];
+      return generateLinearCollinearPoints(raw);
+    }
 
-    default:
-      rawPts.push({ x: -w2, y: -h2 });
-      rawPts.push({ x: w2, y: -h2 });
-      rawPts.push({ x: w2, y: h2 });
-      rawPts.push({ x: -w2, y: h2 });
-      break;
+    default: {
+      const raw = [
+        { x: -w2, y: -h2 },
+        { x: w2, y: -h2 },
+        { x: w2, y: h2 },
+        { x: -w2, y: h2 }
+      ];
+      return generateLinearCollinearPoints(raw);
+    }
   }
-
-  // Hitung kendali Bézier halus awal untuk semua titik
-  return computeSmoothTangents(rawPts);
 }
 
 /**
  * Menggambar Path Poligon atau Kurva Bézier Kustom dari Array Titik
  */
-export function drawCustomPointsPath(ctx, points, curveType = 'linear') {
+export function drawCustomPointsPath(ctx, points, curveType = 'smooth') {
   if (!points || points.length < 3) return;
   const len = points.length;
 
   ctx.beginPath();
   ctx.moveTo(points[0].x, points[0].y);
 
-  if (curveType === 'smooth') {
+  if (curveType === 'linear') {
+    for (let i = 1; i < len; i++) {
+      ctx.lineTo(points[i].x, points[i].y);
+    }
+  } else {
     for (let i = 0; i < len; i++) {
       const curr = points[i];
       const next = points[(i + 1) % len];
       const cp1 = curr.cpOut || { x: curr.x, y: curr.y };
       const cp2 = next.cpIn || { x: next.x, y: next.y };
       ctx.bezierCurveTo(cp1.x, cp1.y, cp2.x, cp2.y, next.x, next.y);
-    }
-  } else {
-    for (let i = 1; i < len; i++) {
-      ctx.lineTo(points[i].x, points[i].y);
     }
   }
   ctx.closePath();
@@ -407,11 +540,18 @@ export function drawCustomPointsPath(ctx, points, curveType = 'linear') {
 /**
  * Menghasilkan SVG Path string (d) untuk kurva Bézier atau poligon titik kustom
  */
-export function getCustomPointsSvgPath(points, curveType = 'linear') {
+export function getCustomPointsSvgPath(points, curveType = 'smooth') {
   if (!points || points.length < 3) return '';
   const len = points.length;
 
-  if (curveType === 'smooth') {
+  if (curveType === 'linear') {
+    let d = `M ${points[0].x} ${points[0].y} `;
+    for (let i = 1; i < len; i++) {
+      d += `L ${points[i].x} ${points[i].y} `;
+    }
+    d += 'Z';
+    return d;
+  } else {
     let d = `M ${points[0].x} ${points[0].y} `;
     for (let i = 0; i < len; i++) {
       const curr = points[i];
@@ -422,20 +562,13 @@ export function getCustomPointsSvgPath(points, curveType = 'linear') {
     }
     d += 'Z';
     return d;
-  } else {
-    let d = `M ${points[0].x} ${points[0].y} `;
-    for (let i = 1; i < len; i++) {
-      d += `L ${points[i].x} ${points[i].y} `;
-    }
-    d += 'Z';
-    return d;
   }
 }
 
 /**
  * Menggambar Path Geometris (Bentuk) dengan skala independen Width & Height
  */
-export function drawShapePath(ctx, shapeType, width, height, cornerRadius = 0, customPoints = null, curveType = 'linear', isEditPointsMode = false) {
+export function drawShapePath(ctx, shapeType, width, height, cornerRadius = 0, customPoints = null, curveType = 'smooth', isEditPointsMode = false) {
   if (customPoints && customPoints.length >= 3) {
     drawCustomPointsPath(ctx, customPoints, curveType);
     return;
@@ -764,7 +897,7 @@ export function applyShapeTextOperation(workingCanvas, options) {
     feather = 0,
     cornerRadius = 20,
     customPoints = null,
-    curveType = 'linear',
+    curveType = 'smooth',
     isEditPointsMode = false,
     text = 'STUDIO',
     fontSize = 60,
